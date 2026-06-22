@@ -22,31 +22,104 @@ interface PluginEnv {
 type BlueprintEntry = string | Record<string, BlueprintEntry[]>;
 
 const CONTACT_BLUEPRINT: BlueprintEntry[] = [
-  '@id', '@source', '@updated_at', '@gender', '@prefix', '@suffix', '@region',
-  '@nationality', '@prefer_language', '@birthday', '@referral_by', '@remarks',
-  '@optout_mobile', '@optout_email',
-
-  'first_name', 'middle_name', 'last_name', 'full_name', 'family_business',
-  'bio:richtext/md',
-
-  { nickname: ['@name'] },
-  { spouse: ['@email', '@phone:phone', 'name'] },
+  "@id",
+  "@source",
+  "@updated_at",
+  "@gender",
+  "@prefix",
+  "@suffix",
+  "@region",
+  "@nationality",
+  "@prefer_language",
+  "@birthday",
+  "@referral_by",
+  "@remarks",
+  "@optout_mobile",
+  "@optout_email",
+  "@remark_file:file",
+  "first_name",
+  "middle_name",
+  "last_name",
+  "full_name",
+  "family_business",
+  "bio:richtext/md",
   {
-    position: [
-      '@type', 'client', '@website', '@direct_phone:phone', '@general_phone:phone',
-      '@direct_phone_ext', '@fax:phone', '@email:email', '@general_email:email',
-      'organization_name', 'department', 'title', 'address',
-    ],
+    "position": [
+      "@type",
+      "client",
+      "@website",
+      "@direct_phone:phone",
+      "@general_phone:phone",
+      "@direct_phone_ext",
+      "@fax:phone",
+      "@email:email",
+      "@general_email:email",
+      "organization_name",
+      "department",
+      "title",
+      "address"
+    ]
   },
-  { home: ['@phone:phone', 'address'] },
-  { other_address: ['address'] },
-  { email: ['@type', '@email:email'] },
-  { phone: ['@type', '@phone:phone'] },
-  { assistant: ['@email:email', '@mobile:phone', '@work_phone:phone', 'name'] },
-  { social_media: ['@type', '@url'] },
   {
-    event_history: ['@date', '@event_name', '@role', '@session', '@rsvp', '@group_rsvp', '@remark'],
+    "email": [
+      "@type",
+      "@email:email"
+    ]
   },
+  {
+    "phone": [
+      "@type",
+      "@phone:phone"
+    ]
+  },
+  {
+    "social_media": [
+      "@type",
+      "@url"
+    ]
+  },
+  {
+    "home": [
+      "@phone:phone",
+      "address"
+    ]
+  },
+  {
+    "other_address": [
+      "address"
+    ]
+  },
+  {
+    "spouse": [
+      "@email",
+      "@phone:phone",
+      "name"
+    ]
+  },
+  {
+    "assistant": [
+      "@email:email",
+      "@mobile:phone",
+      "@work_phone:phone",
+      "name"
+    ]
+  },
+  {
+    "nickname": [
+      "@name"
+    ]
+  },
+  {
+    "event_history": [
+      "@date",
+      "@event_name",
+      "@role",
+      "@session",
+      "@rsvp",
+      "@group_rsvp",
+      "@remark"
+    ]
+  }
 ];
 
 const CONTACT_TAXONOMIES = [
