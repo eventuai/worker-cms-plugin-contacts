@@ -1,19 +1,21 @@
-# worker-cms-plugin-contacts
+# worker-cms-plugin-contacts (Contacts Suite)
 
-A [Worker CMS](https://github.com/zeroxcms) plugin that adds a **contacts / CRM**
-domain. It registers the `contact` content type so contacts are authored as CMS
-pages, and (planned) provides import, advanced search and dedupe tooling.
+A [Worker CMS](https://github.com/zeroxcms) plugin covering the **contact side**
+of the system in one Worker — **contacts / CRM + email quality** — to stay within
+the Cloudflare **Free plan** (50 subrequests/request, 100k requests/day).
 
-Part of the RSVP/contact port — see `cms/../cms-to-rsvp.md`.
+Part of the RSVP/contact port — see `cms/../cms-to-rsvp.md`. Pairs with
+`cms-plugin-events` (the other suite). Replaces the former standalone
+`cms-plugin-email-quality` repo.
 
-## Registers
+## Registers (manifest id `contacts`)
 
 - **Blueprint:** `contact` — multilingual names, 5 work positions, multiple
   emails/phones, 5 assistants, 8 social platforms, spouse, addresses,
-  `event_history` (ported from the legacy `config/cms.mjs`).
+  `event_history`.
 - **Taxonomies:** Contact Type, Industry, Interest, Food Allergies, Email
   Status, Phone Status, Event.
-- **Nav + admin page** proxied at `/admin/plugins/contacts/*`.
+- **Nav (2 items):** Contacts, Email Quality — sections of the same plugin admin.
 
 ## Develop
 
@@ -24,29 +26,24 @@ npm run typecheck
 npm run deploy
 ```
 
-## Bind into the CMS
+## Register into the CMS (D1 URL transport — no service binding)
 
-```toml
-# CMS wrangler.toml
-[[services]]
-binding = "PLUGIN_CONTACTS"
-service = "cms-plugin-contacts"
+1. `wrangler deploy` this Worker, then `wrangler secret put PLUGIN_SECRET`.
+   (For email verification also: `wrangler secret put VERIFIER_API_KEY`.)
+2. In the CMS: **Admin → Plugins → Register plugin**, paste this Worker's base URL.
+   (Requires `plugin:manage` and the same `PLUGIN_SECRET` on the CMS.)
 
-[vars]
-PLUGINS = "PLUGIN_CONTACTS"   # add to the comma-separated list
-```
-
-Share the secret with both Workers: `wrangler secret put PLUGIN_SECRET`.
+No `wrangler.toml` change or CMS redeploy needed.
 
 ## Status
 
-- [x] `contact` blueprint + taxonomies registered
-- [x] Admin dashboard
+- [x] `contact` blueprint + taxonomies; 2-section admin (Contacts / Email Quality)
 - [ ] Import (Excel / CSV / VCF) — needs CMS plugin-write API (F1) + R2 staging
-- [ ] Advanced search + export, duplicate detection
-- [ ] Contact typeahead API
+- [ ] Advanced search + export, duplicate detection, typeahead API
+- [ ] Email verification: search / unverified list / submit-to-verifier
 
 ## Source mapping (legacy → here)
 
-`controller/admin/Contact.mjs`, `ContactAPI.mjs`, `helper/Importer.mjs`,
-`helper/{Contact,ExcelParser,VcfParser,JSONSearch}.mjs`, `importer/Contact.mjs`.
+`controller/admin/{Contact,ContactAPI,EmailQuality}.mjs`, `helper/Importer.mjs`,
+`helper/{Contact,ExcelParser,VcfParser,JSONSearch,EmailQuality}.mjs`,
+`importer/Contact.mjs`.
