@@ -13,133 +13,16 @@
 // tagLists.contact), controller/admin/EmailQuality.mjs.
 // ============================================================
 
+// The plugin manifest (content types, blueprint, taxonomies, nav) is plain
+// data, so it lives as a static JSON file served verbatim at /__plugin/manifest
+// rather than being assembled from constants here.
+import MANIFEST from './manifest.json';
+
 interface PluginEnv {
   PLUGIN_SECRET?: string;
   /** External email-verification API key (wrangler secret put). */
   VERIFIER_API_KEY?: string;
 }
-
-type BlueprintEntry = string | Record<string, BlueprintEntry[]>;
-
-const CONTACT_BLUEPRINT: BlueprintEntry[] = [
-  "@id",
-  "@source",
-  "@updated_at",
-  "@gender",
-  "@prefix",
-  "@suffix",
-  "@region",
-  "@nationality",
-  "@prefer_language",
-  "@birthday",
-  "@referral_by",
-  "@remarks",
-  "@optout_mobile",
-  "@optout_email",
-  "@remark_file:file",
-  "first_name",
-  "middle_name",
-  "last_name",
-  "full_name",
-  "family_business",
-  "bio:richtext/md",
-  {
-    "position": [
-      "@type",
-      "client",
-      "@website",
-      "@direct_phone:phone",
-      "@general_phone:phone",
-      "@direct_phone_ext",
-      "@fax:phone",
-      "@email:email",
-      "@general_email:email",
-      "organization_name",
-      "department",
-      "title",
-      "address"
-    ]
-  },
-  {
-    "email": [
-      "@type",
-      "@email:email"
-    ]
-  },
-  {
-    "phone": [
-      "@type",
-      "@phone:phone"
-    ]
-  },
-  {
-    "social_media": [
-      "@type",
-      "@url"
-    ]
-  },
-  {
-    "home": [
-      "@phone:phone",
-      "address"
-    ]
-  },
-  {
-    "other_address": [
-      "address"
-    ]
-  },
-  {
-    "spouse": [
-      "@email",
-      "@phone:phone",
-      "name"
-    ]
-  },
-  {
-    "assistant": [
-      "@email:email",
-      "@mobile:phone",
-      "@work_phone:phone",
-      "name"
-    ]
-  },
-  {
-    "nickname": [
-      "@name"
-    ]
-  },
-  {
-    "event_history": [
-      "@date",
-      "@event_name",
-      "@role",
-      "@session",
-      "@rsvp",
-      "@group_rsvp",
-      "@remark"
-    ]
-  }
-];
-
-const CONTACT_TAXONOMIES = [
-  'Contact Type', 'Industry', 'Interest', 'Food Allergies',
-  'Email Status', 'Phone Status', 'Event',
-];
-
-const MANIFEST = {
-  id: 'contacts',
-  name: 'Contacts Suite',
-  version: '0.1.0',
-  nav: [
-    { label: 'Contacts', href: 'contacts', roles: ['admin', 'editor'] },
-    { label: 'Email Quality', href: 'email-quality', roles: ['admin'] },
-  ],
-  contentTypes: {
-    blueprint: { contact: CONTACT_BLUEPRINT },
-    taxonomyLists: { contact: CONTACT_TAXONOMIES },
-  },
-};
 
 export default {
   async fetch(request: Request, env: PluginEnv): Promise<Response> {
@@ -187,7 +70,7 @@ const SECTIONS: Record<string, { title: string; intro: string; create?: boolean;
     create: true,
     status: [
       '✅ <b>contact</b> blueprint (names, positions, emails, phones, assistants, social, event history)',
-      `✅ contact taxonomies: ${CONTACT_TAXONOMIES.join(', ')}`,
+      `✅ contact taxonomies: ${MANIFEST.contentTypes.taxonomyLists.contact.join(', ')}`,
       '⬜ Import (Excel / CSV / VCF) — needs CMS plugin-write API (F1) + R2 staging',
       '⬜ Advanced search + export, duplicate detection',
       '⬜ Contact typeahead API (HX equivalent)',
