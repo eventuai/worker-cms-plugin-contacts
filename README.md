@@ -35,6 +35,11 @@ npm run deploy
 
 No `wrangler.toml` change or CMS redeploy needed.
 
+Plugin admin pages run on this Worker's origin inside a CMS sandboxed iframe.
+The CMS appends a short-lived `cms_launch` token to the iframe URL; this Worker
+validates it with `PLUGIN_SECRET` and sets an iframe-origin admin session cookie.
+Hooks and publish calls still use `x-plugin-secret`.
+
 ## Status
 
 - [x] `contact` blueprint + taxonomies; 2-section admin (Contacts / Email Quality)

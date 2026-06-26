@@ -3,6 +3,7 @@ main = "src/index.ts"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
-# The CMS forwards this secret on every hook / admin / publish call.
-# Set it to the same value as the CMS's PLUGIN_SECRET:
+# The CMS uses this secret for hooks / publish calls and to sign the short-lived
+# cms_launch token used by iframe admin pages. Set it to the plugin secret shown
+# in the CMS admin:
 #   wrangler secret put PLUGIN_SECRET
