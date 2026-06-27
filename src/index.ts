@@ -22,6 +22,8 @@ interface PluginEnv {
   PLUGIN_SECRET?: string;
   /** External email-verification API key (wrangler secret put). */
   VERIFIER_API_KEY?: string;
+  /** Plugin-owned Liquid templates and other view assets. */
+  VIEWS: Fetcher;
 }
 
 export default {
@@ -41,7 +43,8 @@ export default {
     }
 
     if (path.startsWith('/__plugin/views/')) {
-      return viewAsset(path.slice('/__plugin/views'.length));
+      const assetPath = path.slice('/__plugin/views'.length) || '/';
+      return serveViewAsset(env.VIEWS, assetPath);
     }
 
     if (path.startsWith('/__plugin/admin')) {
@@ -106,52 +109,40 @@ function adminShell(section: string, user: { name?: string; role?: string }): Re
     })),
   };
 
-  return Response.json(payload, {
+  return clientViewResponse(meta.title, '/templates/contacts-admin.json', payload);
+}
+
+function clientViewResponse(title: string, viewPath: string, data: Record<string, unknown>): Response {
+  return Response.json(data, {
     headers: {
       'x-cms-chrome': '1',
       'x-cms-client-view': '1',
-      'x-cms-view-path': '/templates/contacts-admin.json',
-      'x-cms-title': encodeURIComponent(meta.title),
+      'x-cms-view-path': viewPath,
+      // Encoded so non-ASCII titles stay header-safe; the CMS proxy decodes it.
+      'x-cms-title': encodeURIComponent(title),
     },
   });
 }
 
-function viewAsset(path: string): Response {
-  if (path === '/templates/contacts-admin.json') {
-    return Response.json({
-      sections: { main: { type: 'contacts-admin' } },
-      order: ['main'],
-    });
-  }
-  if (path === '/sections/contacts-admin.liquid') {
-    return new Response(CONTACTS_ADMIN_SECTION, {
-      headers: { 'content-type': 'text/plain; charset=utf-8' },
-    });
-  }
-  return new Response('not found', { status: 404 });
-}
+async function serveViewAsset(views: Fetcher, assetPath: string): Promise<Response> {
+  if (!assetPath.startsWith('/') || assetPath.includes('..')) return new Response('not found', { status: 404 });
+  const response = await views.fetch(new URL(assetPath, 'https://views.local'));
+  if (!response.ok) return new Response('not found', { status: 404 });
 
-const CONTACTS_ADMIN_SECTION = `<div class="min-w-0 max-w-3xl space-y-6">
-  <div class="flex flex-wrap gap-2">
-    {% for item in sectionList %}
-      <a href="/admin/plugins/contacts/{{ item.key | escape }}" class="px-3 py-1.5 rounded-lg text-sm font-semibold {% if item.key == activeSection %}bg-indigo-600 text-white{% else %}bg-white border border-gray-300 text-gray-700 hover:bg-gray-50{% endif %}">{{ item.title | escape }}</a>
-    {% endfor %}
-  </div>
-  {% assign meta = sections[activeSection] | default: sections.contacts %}
-  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-    <h1 class="text-2xl font-bold text-gray-900 mb-1">{{ meta.title | escape }}</h1>
-    <p class="text-gray-600">Hello, {{ user.name | escape }}. {{ meta.intro }}</p>
-    {% if meta.create %}
-      <div class="flex flex-wrap gap-3 mt-4">
-        <a href="/admin/pages/new?page_type=contact" class="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold">New contact</a>
-        <a href="/admin/pages?page_type=contact" class="px-4 py-2 rounded-lg bg-white border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50">All contacts</a>
-      </div>
-    {% endif %}
-  </div>
-  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-    <h2 class="text-lg font-semibold text-gray-900 mb-3">Status</h2>
-    <ul class="text-sm text-gray-700 space-y-1">
-      {% for item in meta.status %}<li>{{ item }}</li>{% endfor %}
-    </ul>
-  </div>
-</div>`;
+  const headers = new Headers(response.headers);
+  if (assetPath.endsWith('.js')) {
+    headers.set('content-type', 'text/javascript; charset=utf-8');
+  } else if (assetPath.endsWith('.json')) {
+    headers.set('content-type', 'application/json; charset=utf-8');
+  } else if (assetPath.endsWith('.liquid')) {
+    headers.set('content-type', 'text/plain; charset=utf-8');
+  }
+  if (assetPath.startsWith('/assets/')) {
+    headers.set('cache-control', 'public, max-age=86400');
+  } else if (assetPath.endsWith('.json') || assetPath.endsWith('.liquid')) {
+    headers.set('cache-control', 'private, max-age=86400');
+  } else {
+    headers.set('cache-control', 'no-store');
+  }
+  return new Response(response.body, { status: response.status, headers });
+}
