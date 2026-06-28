@@ -9,11 +9,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@lionrockjs/worker-cms-plugin": "0.1.0"
+    "@lionrockjs/worker-cms-plugin": "0.1.1"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20240909.0",
-    "typescript": "^5.5.0",
-    "wrangler": "^3.78.0"
+    "@cloudflare/workers-types": "^4.20260628.1",
+    "typescript": "^6.0.3",
+    "wrangler": "^4.105.0"
   }
 }

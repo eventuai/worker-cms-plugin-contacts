@@ -52,6 +52,10 @@ export default {
     if (path.startsWith('/__plugin/admin')) {
       const rest = path.replace(/^\/__plugin\/admin\/?/, '');
       const segments = rest.split('/').filter(Boolean);
+      if (segments[0] === 'views') {
+        const viewPath = `/${segments.slice(1).join('/')}`;
+        return serveViewAsset(env.VIEWS, viewPath);
+      }
       const user = parseCmsUser(request.headers.get('x-cms-user'));
       const section = segments[0] || 'contacts';
       return adminShell(section, user);
