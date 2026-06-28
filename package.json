@@ -8,6 +8,9 @@
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "@lionrockjs/worker-cms-plugin": "0.1.0"
+  },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240909.0",
     "typescript": "^5.5.0",

@@ -17,6 +17,7 @@
 // data, so it lives as a static JSON file served verbatim at /__plugin/manifest
 // rather than being assembled from constants here.
 import MANIFEST from './manifest.json';
+import { clientViewResponse, parseCmsUser, requirePluginSecret, serveViewAsset } from '@lionrockjs/worker-cms-plugin';
 
 interface PluginEnv {
   PLUGIN_SECRET?: string;
@@ -34,8 +35,9 @@ export default {
     const secretRequired = path.startsWith('/__plugin/hooks/')
       || path.startsWith('/__plugin/publish/')
       || path.startsWith('/__plugin/admin');
-    if (secretRequired && env.PLUGIN_SECRET && request.headers.get('x-plugin-secret') !== env.PLUGIN_SECRET) {
-      return new Response('forbidden', { status: 403 });
+    if (secretRequired) {
+      const forbidden = requirePluginSecret(request, env.PLUGIN_SECRET);
+      if (forbidden) return forbidden;
     }
 
     if (path === '/__plugin/manifest') {
@@ -50,7 +52,7 @@ export default {
     if (path.startsWith('/__plugin/admin')) {
       const rest = path.replace(/^\/__plugin\/admin\/?/, '');
       const segments = rest.split('/').filter(Boolean);
-      const user = parseUser(request.headers.get('x-cms-user'));
+      const user = parseCmsUser(request.headers.get('x-cms-user'));
       const section = segments[0] || 'contacts';
       return adminShell(section, user);
     }
@@ -58,15 +60,6 @@ export default {
     return new Response('not found', { status: 404 });
   },
 };
-
-function parseUser(header: string | null): { name?: string; role?: string } {
-  if (!header) return {};
-  try {
-    return JSON.parse(header) as { name?: string; role?: string };
-  } catch {
-    return {};
-  }
-}
 
 const SECTIONS: Record<string, { title: string; intro: string; create?: boolean; status: string[] }> = {
   contacts: {
@@ -110,39 +103,4 @@ function adminShell(section: string, user: { name?: string; role?: string }): Re
   };
 
   return clientViewResponse(meta.title, '/templates/contacts-admin.json', payload);
-}
-
-function clientViewResponse(title: string, viewPath: string, data: Record<string, unknown>): Response {
-  return Response.json(data, {
-    headers: {
-      'x-cms-chrome': '1',
-      'x-cms-client-view': '1',
-      'x-cms-view-path': viewPath,
-      // Encoded so non-ASCII titles stay header-safe; the CMS proxy decodes it.
-      'x-cms-title': encodeURIComponent(title),
-    },
-  });
-}
-
-async function serveViewAsset(views: Fetcher, assetPath: string): Promise<Response> {
-  if (!assetPath.startsWith('/') || assetPath.includes('..')) return new Response('not found', { status: 404 });
-  const response = await views.fetch(new URL(assetPath, 'https://views.local'));
-  if (!response.ok) return new Response('not found', { status: 404 });
-
-  const headers = new Headers(response.headers);
-  if (assetPath.endsWith('.js')) {
-    headers.set('content-type', 'text/javascript; charset=utf-8');
-  } else if (assetPath.endsWith('.json')) {
-    headers.set('content-type', 'application/json; charset=utf-8');
-  } else if (assetPath.endsWith('.liquid')) {
-    headers.set('content-type', 'text/plain; charset=utf-8');
-  }
-  if (assetPath.startsWith('/assets/')) {
-    headers.set('cache-control', 'public, max-age=86400');
-  } else if (assetPath.endsWith('.json') || assetPath.endsWith('.liquid')) {
-    headers.set('cache-control', 'private, max-age=86400');
-  } else {
-    headers.set('cache-control', 'no-store');
-  }
-  return new Response(response.body, { status: response.status, headers });
 }
