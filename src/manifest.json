@@ -1,119 +1,147 @@
 {
-  "id": "contacts",
-  "name": "Contacts Suite",
-  "version": "0.1.0",
-  "nav": [
-    { "label": "Contacts", "href": "contacts", "roles": ["admin", "editor"] },
-    { "label": "Email Quality", "href": "email-quality", "roles": ["admin"], "group": "settings" }
-  ],
-  "contentTypes": {
-    "blueprint": {
-      "contact": [
-        "@id",
-        "@source",
-        "@updated_at",
-        "@gender",
-        "@prefix",
-        "@suffix",
-        "@region",
-        "@nationality",
-        "@prefer_language",
-        "@birthday",
-        "@referral_by",
-        "@remarks",
-        "@optout_mobile",
-        "@optout_email",
-        "@remark_file:file",
-        "first_name",
-        "middle_name",
-        "last_name",
-        "full_name",
-        "family_business",
-        "bio:richtext/md",
-        {
-          "position": [
-            "@type",
-            "client",
-            "@website",
-            "@direct_phone:phone",
-            "@general_phone:phone",
-            "@direct_phone_ext",
-            "@fax:phone",
-            "@email:email",
-            "@general_email:email",
-            "organization_name",
-            "department",
-            "title",
-            "address"
-          ]
-        },
-        {
-          "email": [
-            "@type",
-            "@email:email"
-          ]
-        },
-        {
-          "phone": [
-            "@type",
-            "@phone:phone"
-          ]
-        },
-        {
-          "social_media": [
-            "@type",
-            "@url"
-          ]
-        },
-        {
-          "home": [
-            "@phone:phone",
-            "address"
-          ]
-        },
-        {
-          "other_address": [
-            "address"
-          ]
-        },
-        {
-          "spouse": [
-            "@email",
-            "@phone:phone",
-            "name"
-          ]
-        },
-        {
-          "assistant": [
-            "@email:email",
-            "@mobile:phone",
-            "@work_phone:phone",
-            "name"
-          ]
-        },
-        {
-          "nickname": [
-            "@name"
-          ]
-        },
-        {
-          "event_history": [
-            "@date",
-            "@event_name",
-            "@role",
-            "@session",
-            "@rsvp",
-            "@group_rsvp",
-            "@remark"
-          ]
-        }
-      ]
-    },
-    "taxonomyLists": {
-      "contact": [
-        "Contact Type", "Industry", "Interest", "Food Allergies",
-        "Email Status", "Phone Status", "Event"
-      ]
-    }
+ "id": "contacts",
+ "name": "Contacts Suite",
+ "version": "0.1.0",
+ "nav": [
+  {
+   "label": "Contacts",
+   "href": "contacts",
+   "roles": [
+    "admin",
+    "editor"
+   ]
+  },
+  {
+   "label": "Email Quality",
+   "href": "email-quality",
+   "roles": [
+    "admin"
+   ],
+   "group": "settings"
+  },
+  {
+   "label": "Contact Reports",
+   "href": "reports",
+   "roles": [
+    "admin"
+   ],
+   "group": "settings"
   }
+ ],
+ "contentTypes": {
+  "blueprint": {
+   "contact": [
+    "@id",
+    "@source",
+    "@updated_at",
+    "@gender",
+    "@prefix",
+    "@suffix",
+    "@region",
+    "@nationality",
+    "@prefer_language",
+    "@birthday",
+    "@referral_by",
+    "@remarks",
+    "@optout_mobile",
+    "@optout_email",
+    "@email_status",
+    "@remark_file:file",
+    "first_name",
+    "middle_name",
+    "last_name",
+    "full_name",
+    "family_business",
+    "bio:richtext/md",
+    {
+     "position": [
+      "@type",
+      "client",
+      "@website",
+      "@direct_phone:phone",
+      "@general_phone:phone",
+      "@direct_phone_ext",
+      "@fax:phone",
+      "@email:email",
+      "@general_email:email",
+      "organization_name",
+      "department",
+      "title",
+      "address"
+     ]
+    },
+    {
+     "email": [
+      "@type",
+      "@email:email"
+     ]
+    },
+    {
+     "phone": [
+      "@type",
+      "@phone:phone"
+     ]
+    },
+    {
+     "social_media": [
+      "@type",
+      "@url"
+     ]
+    },
+    {
+     "home": [
+      "@phone:phone",
+      "address"
+     ]
+    },
+    {
+     "other_address": [
+      "address"
+     ]
+    },
+    {
+     "spouse": [
+      "@email",
+      "@phone:phone",
+      "name"
+     ]
+    },
+    {
+     "assistant": [
+      "@email:email",
+      "@mobile:phone",
+      "@work_phone:phone",
+      "name"
+     ]
+    },
+    {
+     "nickname": [
+      "@name"
+     ]
+    },
+    {
+     "event_history": [
+      "@date",
+      "@event_name",
+      "@role",
+      "@session",
+      "@rsvp",
+      "@group_rsvp",
+      "@remark"
+     ]
+    }
+   ]
+  },
+  "taxonomyLists": {
+   "contact": [
+    "Contact Type",
+    "Industry",
+    "Interest",
+    "Food Allergies",
+    "Email Status",
+    "Phone Status",
+    "Event"
+   ]
+  }
+ }
 }

@@ -1,0 +1,27 @@
+<div class="flex items-center justify-between gap-4 mb-4">
+  <div>
+    <a class="inline-block text-xs text-gray-500 mb-1 hover:text-indigo-700" href="{{ backHref | escape }}">← Contacts</a>
+    <h1 class="text-2xl font-bold text-gray-900">Contact quality</h1>
+    <p class="mt-1 text-sm text-gray-500">{{ total }} contacts, tiered by how directly they can be reached.</p>
+  </div>
+</div>
+
+{% for tier in tiers %}
+<div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6" style="margin-bottom:1rem">
+  <div class="flex items-center justify-between gap-4 mb-4">
+    <h2 class="text-lg font-bold text-gray-900">Tier {{ tier.tier }} — {{ tier.label | escape }}</h2>
+    <div class="text-sm text-gray-500">{{ tier.count }} ({{ tier.percent }}%)</div>
+  </div>
+  {% if tier.hasSamples %}
+  <div class="flex flex-wrap gap-2">
+    {% for sample in tier.samples %}
+    <a class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 hover:text-indigo-700" href="{{ sample.editHref | escape }}">{{ sample.name | escape }}{% if sample.organization != blank %} · {{ sample.organization | escape }}{% endif %}</a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-sm text-gray-400">No contacts in this tier.</p>
+  {% endif %}
+</div>
+{% endfor %}
+
+<p class="mt-1 text-sm text-gray-500">The legacy user-usage report is not ported — it reads the CMS's audit tables, which the plugin API doesn't expose.</p>

@@ -1,28 +1,34 @@
 // ============================================================
-// Worker CMS plugin — "contacts" suite (CRM + email quality).
+// Worker CMS plugin — "contacts" suite (CRM + email quality + reports).
 //
 // One Worker for the whole contact side of the system, to stay within the
 // Cloudflare Free plan's per-request subrequest cap (50) and daily request
-// budget (100k): contacts/CRM + email verification.
+// budget (100k). Registers the `contact` content type (blueprint + taxonomies)
+// so contacts are authored as CMS pages through the CMS editor; this plugin
+// adds the surrounding machinery the generic editor doesn't have:
 //
-// Registers the `contact` content type (blueprint + taxonomies) so contacts are
-// authored as CMS pages, and exposes two admin nav items (Contacts / Email
-// Quality) under a single manifest id.
+//   contacts       — list + search, CSV export (+ sample), CSV/VCF import
+//                    (preview → confirm), duplicate check, typeahead JSON
+//   email-quality  — verification status over every contact's emails
+//   reports        — contact-quality tier analysis
 //
-// Ported from the legacy Eventuai app: config/cms.mjs (blueprint.contact +
-// tagLists.contact), controller/admin/EmailQuality.mjs.
+// Ported from the legacy Eventuai app: controller/admin/Contact.mjs,
+// ContactAPI.mjs, EmailQuality.mjs, Report.mjs, helper/Importer.mjs.
 // ============================================================
 
-// The plugin manifest (content types, blueprint, taxonomies, nav) is plain
-// data, so it lives as a static JSON file served verbatim at /__plugin/manifest
-// rather than being assembled from constants here.
 import MANIFEST from './manifest.json';
-import { clientViewResponse, parseCmsUser, requirePluginSecret, serveViewAsset } from '@lionrockjs/worker-cms-plugin';
+import { CmsClient, CmsApiError, CmsNotConfiguredError } from './cms';
+import { ADMIN_BASE, checkDuplicate, contactsIndex, exportContacts, exportSample, searchJson } from './contacts';
+import { emailQualityIndex, setEmailStatus, submitToVerifier, type VerifierEnv } from './email-quality';
+import { confirmImport, importForm, previewImport } from './import';
+import { contactQualityReport } from './reports';
+import { contactsAccessForRequest, forbidden } from './permissions';
+import { adminView, requirePluginSecret, serveViewAsset } from '@lionrockjs/worker-cms-plugin';
 
-interface PluginEnv {
+interface PluginEnv extends VerifierEnv {
   PLUGIN_SECRET?: string;
-  /** External email-verification API key (wrangler secret put). */
-  VERIFIER_API_KEY?: string;
+  /** Base URL of the CMS Worker (for the F1 page read/write API). */
+  CMS_URL?: string;
   /** Plugin-owned Liquid templates and other view assets. */
   VIEWS: Fetcher;
 }
@@ -36,8 +42,8 @@ export default {
       || path.startsWith('/__plugin/publish/')
       || path.startsWith('/__plugin/admin');
     if (secretRequired) {
-      const forbidden = requirePluginSecret(request, env.PLUGIN_SECRET);
-      if (forbidden) return forbidden;
+      const forbiddenResponse = requirePluginSecret(request, env.PLUGIN_SECRET);
+      if (forbiddenResponse) return forbiddenResponse;
     }
 
     if (path === '/__plugin/manifest') {
@@ -49,62 +55,83 @@ export default {
       return serveViewAsset(env.VIEWS, assetPath);
     }
 
+    if (path.startsWith('/__plugin/hooks/')) {
+      return new Response('ok');
+    }
+
     if (path.startsWith('/__plugin/admin')) {
-      const rest = path.replace(/^\/__plugin\/admin\/?/, '');
-      const segments = rest.split('/').filter(Boolean);
-      if (segments[0] === 'views') {
-        const viewPath = `/${segments.slice(1).join('/')}`;
-        return serveViewAsset(env.VIEWS, viewPath);
+      try {
+        return await handleAdmin(request, env, url);
+      } catch (error) {
+        if (error instanceof CmsNotConfiguredError) {
+          return adminView(env.VIEWS, 'Contacts', 'error', {
+            heading: 'CMS link not configured',
+            message: 'Set CMS_URL and PLUGIN_SECRET so the plugin can reach the CMS page API.',
+          });
+        }
+        if (error instanceof CmsApiError) {
+          return adminView(env.VIEWS, 'Contacts', 'error', {
+            heading: `CMS responded ${error.status}`,
+            message: error.message,
+          });
+        }
+        throw error;
       }
-      const user = parseCmsUser(request.headers.get('x-cms-user'));
-      const section = segments[0] || 'contacts';
-      return adminShell(section, user);
     }
 
     return new Response('not found', { status: 404 });
   },
 };
 
-const SECTIONS: Record<string, { title: string; intro: string; create?: boolean; status: string[] }> = {
-  contacts: {
-    title: 'Contacts',
-    intro: 'The <code>contact</code> content type is registered.',
-    create: true,
-    status: [
-      '✅ <b>contact</b> blueprint (names, positions, emails, phones, assistants, social, event history)',
-      `✅ contact taxonomies: ${MANIFEST.contentTypes.taxonomyLists.contact.join(', ')}`,
-      '⬜ Import (Excel / CSV / VCF) — needs CMS plugin-write API (F1) + R2 staging',
-      '⬜ Advanced search + export, duplicate detection',
-      '⬜ Contact typeahead API (HX equivalent)',
-    ],
-  },
-  'email-quality': {
-    title: 'Email Quality',
-    intro: 'Email verification over the contacts you manage.',
-    status: [
-      '⬜ Search email status',
-      '⬜ List unverified emails',
-      '⬜ Submit batch to external verifier (needs VERIFIER_API_KEY)',
-    ],
-  },
-};
+async function handleAdmin(request: Request, env: PluginEnv, url: URL): Promise<Response> {
+  const rest = url.pathname.replace(/^\/__plugin\/admin\/?/, '');
+  const segments = rest.split('/').filter(Boolean);
+  if (segments[0] === 'views') {
+    return serveViewAsset(env.VIEWS, `/${segments.slice(1).join('/')}`);
+  }
 
-function adminShell(section: string, user: { name?: string; role?: string }): Response {
-  const meta = SECTIONS[section] ?? SECTIONS.contacts;
-  const payload = {
-    activeSection: SECTIONS[section] ? section : 'contacts',
-    user: { name: user.name ?? 'there', role: user.role ?? '' },
-    sections: Object.fromEntries(Object.entries(SECTIONS).map(([key, value]) => [key, {
-      title: value.title,
-      intro: value.intro,
-      create: !!value.create,
-      status: value.status,
-    }])),
-    sectionList: Object.entries(SECTIONS).map(([key, value]) => ({
-      key,
-      title: value.title,
-    })),
-  };
+  const access = contactsAccessForRequest(request);
+  if (!access.canView) return forbidden();
+  const jsonOnly = wantsJson(url);
+  const cms = new CmsClient(env);
+  const section = segments[0] || 'contacts';
 
-  return clientViewResponse(meta.title, '/templates/contacts-admin.json', payload);
+  if (section === 'contacts') {
+    const sub = segments[1] ?? '';
+    if (!sub) return contactsIndex(cms, env.VIEWS, url, jsonOnly);
+    if (sub === 'export') return exportContacts(cms, url);
+    if (sub === 'export-sample') return exportSample();
+    if (sub === 'check-duplicate.json') return checkDuplicate(cms, url);
+    if (sub === 'search.json') return searchJson(cms, url);
+    if (sub === 'import') {
+      if (!access.canEdit) return forbidden();
+      if (segments[2] === 'confirm' && request.method === 'POST') return confirmImport(request, cms);
+      if (request.method === 'POST') return previewImport(request, cms, env.VIEWS, jsonOnly);
+      return importForm(env.VIEWS, jsonOnly);
+    }
+  }
+
+  if (section === 'email-quality') {
+    if (segments[1] === 'status' && request.method === 'POST') {
+      if (!access.canEdit) return forbidden();
+      return setEmailStatus(request, cms);
+    }
+    if (segments[1] === 'submit' && request.method === 'POST') {
+      if (!access.canEdit) return forbidden();
+      return submitToVerifier(cms, env);
+    }
+    return emailQualityIndex(cms, env.VIEWS, env, url, jsonOnly);
+  }
+
+  if (section === 'reports') {
+    return contactQualityReport(cms, env.VIEWS, jsonOnly);
+  }
+
+  return contactsIndex(cms, env.VIEWS, new URL(`${url.origin}${ADMIN_BASE}/contacts`), jsonOnly);
+}
+
+function wantsJson(url: URL): boolean {
+  const format = url.searchParams.get('format');
+  const json = url.searchParams.get('json');
+  return format === 'json' || (url.searchParams.has('json') && json !== '0' && json !== 'false');
 }

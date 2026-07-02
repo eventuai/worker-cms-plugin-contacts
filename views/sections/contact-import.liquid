@@ -1,0 +1,26 @@
+<div class="flex items-center justify-between gap-4 mb-4">
+  <div>
+    <a class="inline-block text-xs text-gray-500 mb-1 hover:text-indigo-700" href="{{ backHref | escape }}">← Contacts</a>
+    <h1 class="text-2xl font-bold text-gray-900">Import contacts</h1>
+    <p class="mt-1 text-sm text-gray-500">CSV (legacy contact export format) or VCF. You'll review a preview before anything is written. Excel files: save as CSV first.</p>
+  </div>
+  <a class="inline-block px-4 py-2 rounded-lg text-sm font-semibold border border-gray-300 bg-white text-gray-700 hover:bg-gray-50" href="{{ sampleHref | escape }}">Sample CSV</a>
+</div>
+
+{% if error != blank %}
+<div class="bg-white rounded-xl shadow-sm border border-red-300 p-6" style="margin-bottom:1rem">
+  <p class="text-sm text-red-600">{{ error | escape }}</p>
+</div>
+{% endif %}
+
+<form method="post" action="{{ action | escape }}" enctype="multipart/form-data" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+  <label class="block mb-3">
+    <span class="block text-sm text-gray-700 mb-1">File (.csv or .vcf)</span>
+    <input class="block w-full text-sm" type="file" name="file" accept=".csv,.vcf,text/csv,text/vcard">
+  </label>
+  <label class="block mb-3">
+    <span class="block text-sm text-gray-700 mb-1">…or paste the contents</span>
+    <textarea class="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono" name="raw" rows="10" placeholder="contact_id,first_name,last_name,email_work_1,…"></textarea>
+  </label>
+  <button class="inline-block px-4 py-2 rounded-lg text-sm font-semibold border border-transparent bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer" type="submit">Preview import</button>
+</form>

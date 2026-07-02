@@ -1,0 +1,69 @@
+<div class="flex items-center justify-between gap-4 mb-4">
+  <div>
+    <h1 class="text-2xl font-bold text-gray-900">Email Quality</h1>
+    <p class="mt-1 text-sm text-gray-500">Verification status across every contact's email addresses.</p>
+  </div>
+  <form method="post" action="{{ submitAction | escape }}">
+    <button class="inline-block px-4 py-2 rounded-lg text-sm font-semibold border border-transparent bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer" type="submit">Submit unverified to verifier</button>
+  </form>
+</div>
+
+{% if flash != blank %}
+<div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6" style="margin-bottom:1rem">
+  <p class="text-sm text-gray-700">{{ flash | escape }}</p>
+</div>
+{% endif %}
+
+{% unless verifierConfigured %}
+<p class="mt-1 text-sm text-gray-500" style="margin-bottom:1rem">External verifier not configured — set <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">VERIFIER_API_URL</code> and <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">VERIFIER_API_KEY</code> to enable batch verification. Statuses can still be set by hand below.</p>
+{% endunless %}
+
+<div class="grid grid-cols-2 sm:grid-cols-3 gap-2" style="margin-bottom:1rem">
+  {% for stat in counts %}
+  <div class="border border-gray-200 rounded-lg p-3 text-center">
+    <div class="text-2xl font-bold text-gray-900">{{ stat.value }}</div>
+    <div class="text-xs text-gray-500">{{ stat.label | escape }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<form method="get" action="{{ searchAction | escape }}" class="flex flex-wrap items-center gap-1.5 mb-4">
+  <input class="block px-3 py-2 border border-gray-300 rounded-lg text-sm flex-1" type="search" name="q" value="{{ q | escape }}" placeholder="Search an email address…">
+  <button class="inline-block px-4 py-2 rounded-lg text-sm font-semibold border border-transparent bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer" type="submit">Search</button>
+  {% if q != blank %}<a class="inline-block px-4 py-2 rounded-lg text-sm font-semibold border border-gray-300 bg-white text-gray-700 hover:bg-gray-50" href="{{ searchAction | escape }}">Clear</a>{% endif %}
+</form>
+
+<h2 class="text-lg font-bold text-gray-900" style="margin-bottom:.5rem">{% if isSearch %}Search results{% else %}Unverified emails{% endif %} ({{ rowCount }})</h2>
+<div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
+  <table class="w-full text-left text-sm">
+    <thead class="bg-gray-50 border-b border-gray-200">
+      <tr>
+        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Contact</th>
+        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Emails</th>
+        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Heuristic</th>
+        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100">
+      {% for row in rows %}
+      <tr>
+        <td class="px-6 py-3 text-sm text-gray-700"><a class="text-indigo-600 font-medium hover:text-indigo-800" href="{{ row.editHref | escape }}">{{ row.name | escape }}</a>{% if row.organization != blank %}<div class="text-xs text-gray-400">{{ row.organization | escape }}</div>{% endif %}</td>
+        <td class="px-6 py-3 text-sm text-gray-700">{{ row.emails | escape }}</td>
+        <td class="px-6 py-3 text-sm text-gray-700"><span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">{{ row.heuristic }}</span></td>
+        <td class="px-6 py-3 text-sm text-gray-700">
+          <form method="post" action="{{ row.statusAction | escape }}" class="flex flex-wrap items-center gap-1.5">
+            <input type="hidden" name="contact_id" value="{{ row.id }}">
+            <select class="block px-3 py-2 border border-gray-300 rounded-lg text-sm" name="status">
+              {% unless row.hasStatus %}<option value="" selected>—</option>{% endunless %}
+              {% for status in row.statuses %}<option value="{{ status.value }}"{% if status.selected %} selected{% endif %}>{{ status.value }}</option>{% endfor %}
+            </select>
+            <button class="border-0 bg-transparent p-0 text-xs font-semibold text-indigo-600 cursor-pointer" type="submit">Set</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="px-6 py-10 text-center text-sm text-gray-400">{% if isSearch %}No contact carries that email.{% else %}Every contact email has a status.{% endif %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

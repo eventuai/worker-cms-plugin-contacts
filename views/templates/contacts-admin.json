@@ -1,8 +1,0 @@
-{
-  "sections": {
-    "main": {
-      "type": "contacts-admin"
-    }
-  },
-  "order": ["main"]
-}
