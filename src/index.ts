@@ -27,7 +27,7 @@ import { adminView, requirePluginSecret, serveViewAsset } from '@lionrockjs/work
 
 interface PluginEnv extends VerifierEnv {
   PLUGIN_SECRET?: string;
-  /** Base URL of the CMS Worker (for the F1 page read/write API). */
+  /** Base URL of the CMS Worker (for the Plugin API page read/write API). */
   CMS_URL?: string;
   /** Plugin-owned Liquid templates and other view assets. */
   VIEWS: Fetcher;

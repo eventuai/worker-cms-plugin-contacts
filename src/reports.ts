@@ -7,7 +7,7 @@
 //   tier 5 = no way to reach them
 //
 // The legacy user-usage report is NOT ported: it read the host's audit tables
-// directly, which the F1 API deliberately doesn't expose to plugins.
+// directly, which the Plugin API deliberately doesn't expose to plugins.
 // ============================================================
 
 import { CmsClient, contactRow, items, type CmsPage } from './cms';

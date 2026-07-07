@@ -3,7 +3,7 @@
 // search an email's verification status, list contacts whose emails are
 // unverified, submit a batch to an external verifier, and set a status by
 // hand. Status lives on the contact page as the `email_status` attr (values:
-// verified / unverified / risky / invalid / pending), written over F1.
+// verified / unverified / risky / invalid / pending), written over the Plugin API.
 //
 // The external verifier is generic: POST {emails:[…]} to VERIFIER_API_URL with
 // a bearer VERIFIER_API_KEY, expecting [{email, status}] back. Without both

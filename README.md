@@ -20,13 +20,13 @@ Part of the RSVP/contact port — see `cms/../cms-to-rsvp.md`. Pairs with
 
 ## Admin sections
 
-- **Contacts** (`/admin/plugins/contacts/contacts`) — list + search (F1 `q`
+- **Contacts** (`/admin/plugins/contacts/contacts`) — list + search (Plugin API `q`
   over names/emails/organizations), CSV export of the current search,
   export-sample, and **CSV/VCF import** with a preview → confirm flow
   (`src/import.ts`): rows match an existing contact by legacy `contact_id` →
   any email → full-name key (consumed once, so re-imports are idempotent);
-  creates run in 25-row F1 batches, updates per contact. Excel files aren't
-  parsed — convert to CSV first. Taxonomy-tag columns are skipped (F1 has no
+  creates run in 25-row Plugin API batches, updates per contact. Excel files aren't
+  parsed — convert to CSV first. Taxonomy-tag columns are skipped (Plugin API has no
   tag-name resolution yet). Authoring stays in the CMS page editor.
 - **JSON endpoints** — `contacts/check-duplicate.json?email=&name=` (legacy
   check_duplicate) and `contacts/search.json?q=` (typeahead; the events
@@ -69,7 +69,7 @@ No `wrangler.toml` change or CMS redeploy needed.
 - [x] Duplicate detection + typeahead JSON
 - [x] Email quality (heuristic + external verifier + manual statuses)
 - [x] Contact-quality tier report
-- [ ] Taxonomy-tag import/assignment (needs F1 tag-name resolution)
+- [ ] Taxonomy-tag import/assignment (needs Plugin API tag-name resolution)
 - [ ] User-usage report (needs host audit access)
 
 ## Source mapping (legacy → here)

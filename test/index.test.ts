@@ -1,6 +1,6 @@
 // ============================================================
 // Contacts suite tests — drive the plugin Worker directly with a mocked
-// global fetch standing in for the CMS F1 API ({CMS_URL}/__cms/*), the same
+// global fetch standing in for the CMS Plugin API ({CMS_URL}/__cms/*), the same
 // pattern as the events plugin's suite. Client-view responses are rendered
 // through the real Liquid templates so assertions cover the actual HTML.
 // ============================================================
@@ -60,7 +60,7 @@ interface FakePage {
   lect: Record<string, unknown>;
 }
 
-/** Fake F1: GET /pages list (with naive q over JSON), GET/PUT /pages/:id, POST /pages/batch. */
+/** Fake Plugin API: GET /pages list (with naive q over JSON), GET/PUT /pages/:id, POST /pages/batch. */
 function fakeCms(pages: FakePage[]) {
   const puts: Array<{ id: number; body: Record<string, unknown> }> = [];
   const batches: Array<Record<string, unknown>> = [];
@@ -273,7 +273,7 @@ describe('email quality', () => {
     expect(html).toContain('VERIFIER_API_URL');
   });
 
-  it('sets a manual status over F1', async () => {
+  it('sets a manual status over the Plugin API', async () => {
     const { puts } = fakeCms([contact(22, 'Uma', { email: [{ email: 'uma@example.com' }] })]);
     const response = await plugin.fetch(request('/__plugin/admin/email-quality/status', {
       method: 'POST',
@@ -287,7 +287,7 @@ describe('email quality', () => {
   it('submits unverified emails to the configured verifier and writes results back', async () => {
     const pages = [contact(22, 'Uma', { email: [{ email: 'uma@example.com' }] })];
     const puts: Array<{ id: number; body: Record<string, unknown> }> = [];
-    // One stub covering both the CMS F1 API and the external verifier.
+    // One stub covering both the CMS Plugin API and the external verifier.
     const combined = vi.fn(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input : input.url);
       if (url.origin === 'https://verify.test') {

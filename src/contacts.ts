@@ -4,7 +4,7 @@
 // Authoring stays in the CMS page editor — rows link there.
 //
 // Ported from the legacy controller/admin/Contact.mjs list/search/export
-// surface. Search rides the F1 `q` (name/slug/lect LIKE per term), so it
+// surface. Search rides the Plugin API `q` (name/slug/lect LIKE per term), so it
 // covers names, emails, organizations and phone digits without a bespoke
 // index.
 // ============================================================
@@ -61,7 +61,7 @@ const EXPORT_COLUMNS = [
 export async function exportContacts(cms: CmsClient, url: URL): Promise<Response> {
   const q = (url.searchParams.get('q') ?? '').trim();
   const lines: string[] = [EXPORT_COLUMNS.map(csvValue).join(',')];
-  // Bounded pagination keeps each F1 call light; EXPORT_LIMIT rows per call.
+  // Bounded pagination keeps each Plugin API call light; EXPORT_LIMIT rows per call.
   for (let offset = 0; ; offset += EXPORT_LIMIT) {
     const { pages, total } = await cms.list('contact', { q: q || undefined, limit: EXPORT_LIMIT, offset });
     for (const page of pages) lines.push(exportRow(page).map(csvValue).join(','));

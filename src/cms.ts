@@ -1,7 +1,7 @@
 // ============================================================
 // Contacts Suite CMS bridge.
 //
-// Shared F1 client/types and neutral lect readers live in
+// Shared Plugin API client/types and neutral lect readers live in
 // @lionrockjs/worker-cms-plugin; this file adds the contact-specific
 // flatteners the admin list, export, dedupe and import flows share.
 // ============================================================
