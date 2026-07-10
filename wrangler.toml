@@ -14,3 +14,12 @@ run_worker_first = true
 # The CMS forwards this secret on every hook / admin / publish call.
 # Set it to the same value as the CMS's PLUGIN_SECRET:
 #   wrangler secret put PLUGIN_SECRET
+
+# ── Multi-tenant mode (several CMS hosts → this one plugin) ────────────────────
+# Bind a KV namespace with one record per connected CMS; CMS_URL/PLUGIN_SECRET
+# then become an optional legacy fallback tenant:
+#   wrangler kv key put --binding TENANTS "tenant:https://cms1.example.com" \
+#     '{"secret":"<32-byte hex, unique per CMS>"}'
+# [[kv_namespaces]]
+# binding = "TENANTS"
+# id = "<kv-id>"

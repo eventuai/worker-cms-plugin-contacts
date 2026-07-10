@@ -23,27 +23,35 @@ import { emailQualityIndex, setEmailStatus, submitToVerifier, type VerifierEnv }
 import { confirmImport, importForm, previewImport } from './import';
 import { contactQualityReport } from './reports';
 import { contactsAccessForRequest, forbidden } from './permissions';
-import { adminView, requirePluginSecret, serveViewAsset } from '@lionrockjs/worker-cms-plugin';
+import { adminView, requireTenant, serveViewAsset, tenantClientEnv } from '@lionrockjs/worker-cms-plugin';
 
 interface PluginEnv extends VerifierEnv {
   PLUGIN_SECRET?: string;
   /** Base URL of the CMS Worker (for the Plugin API page read/write API). */
   CMS_URL?: string;
+  /** Multi-tenant registry: `tenant:<cms origin>` → TenantConfig JSON. When
+   *  unbound, CMS_URL + PLUGIN_SECRET form the single legacy tenant. */
+  TENANTS?: KVNamespace;
   /** Plugin-owned Liquid templates and other view assets. */
   VIEWS: Fetcher;
 }
 
 export default {
-  async fetch(request: Request, env: PluginEnv): Promise<Response> {
+  async fetch(request: Request, baseEnv: PluginEnv): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
 
+    // Secret-authenticated host calls resolve their tenant; downstream code
+    // then runs against a tenant-scoped env, so every CmsClient built from
+    // `env` is bound to the calling CMS only.
+    let env = baseEnv;
     const secretRequired = path.startsWith('/__plugin/hooks/')
       || path.startsWith('/__plugin/publish/')
       || path.startsWith('/__plugin/admin');
     if (secretRequired) {
-      const forbiddenResponse = requirePluginSecret(request, env.PLUGIN_SECRET);
-      if (forbiddenResponse) return forbiddenResponse;
+      const tenant = await requireTenant(request, baseEnv);
+      if (tenant instanceof Response) return tenant;
+      env = tenantClientEnv(baseEnv, tenant);
     }
 
     if (path === '/__plugin/manifest') {
