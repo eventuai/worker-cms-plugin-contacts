@@ -18,7 +18,7 @@
 
 import MANIFEST from './manifest.json';
 import { CmsClient, CmsApiError, CmsNotConfiguredError } from './cms';
-import { ADMIN_BASE, checkDuplicate, contactsIndex, exportContacts, exportSample, searchJson } from './contacts';
+import { ADMIN_BASE, bulkDeleteContacts, checkDuplicate, contactsIndex, exportContacts, exportSample, searchJson } from './contacts';
 import { emailQualityIndex, setEmailStatus, submitToVerifier, type VerifierEnv } from './email-quality';
 import { confirmImport, importForm, previewImport } from './import';
 import { contactQualityReport } from './reports';
@@ -63,6 +63,13 @@ export default {
       return serveViewAsset(env.VIEWS, assetPath);
     }
 
+    // Static assets declared in the plugin manifest. The CMS fetches these at
+    // this bare path — both when an admin approves one (hash pinning) and on
+    // every proxied serve — before allowing them to run under CMS chrome.
+    if (path.startsWith('/assets/')) {
+      return serveViewAsset(env.VIEWS, path);
+    }
+
     if (path.startsWith('/__plugin/hooks/')) {
       return new Response('ok');
     }
@@ -97,6 +104,9 @@ async function handleAdmin(request: Request, env: PluginEnv, url: URL): Promise<
   if (segments[0] === 'views') {
     return serveViewAsset(env.VIEWS, `/${segments.slice(1).join('/')}`);
   }
+  if (segments[0] === 'assets') {
+    return serveViewAsset(env.VIEWS, `/assets/${segments.slice(1).join('/')}`);
+  }
 
   const access = contactsAccessForRequest(request);
   if (!access.canView) return forbidden();
@@ -106,7 +116,11 @@ async function handleAdmin(request: Request, env: PluginEnv, url: URL): Promise<
 
   if (section === 'contacts') {
     const sub = segments[1] ?? '';
-    if (!sub) return contactsIndex(cms, env.VIEWS, url, jsonOnly);
+    if (!sub) return contactsIndex(cms, env.VIEWS, url, jsonOnly, access.canEdit);
+    if (sub === 'bulk-delete' && request.method === 'POST') {
+      if (!access.canEdit) return forbidden();
+      return bulkDeleteContacts(request, cms);
+    }
     if (sub === 'export') return exportContacts(cms, url);
     if (sub === 'export-sample') return exportSample();
     if (sub === 'check-duplicate.json') return checkDuplicate(cms, url);
@@ -135,7 +149,7 @@ async function handleAdmin(request: Request, env: PluginEnv, url: URL): Promise<
     return contactQualityReport(cms, env.VIEWS, jsonOnly);
   }
 
-  return contactsIndex(cms, env.VIEWS, new URL(`${url.origin}${ADMIN_BASE}/contacts`), jsonOnly);
+  return contactsIndex(cms, env.VIEWS, new URL(`${url.origin}${ADMIN_BASE}/contacts`), jsonOnly, access.canEdit);
 }
 
 function wantsJson(url: URL): boolean {

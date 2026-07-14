@@ -2,6 +2,12 @@
  "id": "contacts",
  "name": "Contacts Suite",
  "version": "0.1.0",
+ "assets": [
+  {
+   "path": "/assets/contacts-bulk.js",
+   "label": "Contacts list bulk selection (select all + selected count)"
+  }
+ ],
  "nav": [
   {
    "label": "Contacts",
@@ -123,6 +129,7 @@
      "event_history": [
       "@date",
       "@event_name",
+      "*event",
       "@role",
       "@session",
       "@rsvp",

@@ -60,10 +60,11 @@ interface FakePage {
   lect: Record<string, unknown>;
 }
 
-/** Fake Plugin API: GET /pages list (with naive q over JSON), GET/PUT /pages/:id, POST /pages/batch. */
+/** Fake Plugin API: GET /pages list (with naive q over JSON), GET/PUT /pages/:id, POST/DELETE /pages/batch. */
 function fakeCms(pages: FakePage[]) {
   const puts: Array<{ id: number; body: Record<string, unknown> }> = [];
   const batches: Array<Record<string, unknown>> = [];
+  const deletes: number[][] = [];
   const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input : input.url);
     if (url.pathname === '/__cms/pages' && (!init?.method || init.method === 'GET')) {
@@ -74,6 +75,11 @@ function fakeCms(pages: FakePage[]) {
       const matched = pages.filter((page) => page.page_type === type
         && (!q || `${page.name} ${JSON.stringify(page.lect)}`.toLowerCase().includes(q)));
       return Response.json({ pages: matched.slice(offset, offset + limit), total: matched.length });
+    }
+    if (url.pathname === '/__cms/pages/batch' && init?.method === 'DELETE') {
+      const body = JSON.parse(String(init.body)) as { ids: number[] };
+      deletes.push(body.ids);
+      return Response.json({ ok: true, trashed: body.ids.length });
     }
     if (url.pathname === '/__cms/pages/batch' && init?.method === 'POST') {
       const body = JSON.parse(String(init.body)) as Record<string, unknown>;
@@ -93,7 +99,7 @@ function fakeCms(pages: FakePage[]) {
     return new Response('not found', { status: 404 });
   });
   vi.stubGlobal('fetch', fetcher);
-  return { puts, batches, fetcher };
+  return { puts, batches, deletes, fetcher };
 }
 
 function contact(id: number, name: string, lect: Record<string, unknown> = {}): FakePage {
@@ -132,7 +138,21 @@ describe('contacts admin', () => {
     expect(html).toContain('Analytical Engines');
     expect(html).toContain('ada@personal.example');
     expect(html).toContain('/admin/pages/11/edit');
+    expect(html).toContain('data-privacy-table');
+    expect(html).toContain('data-private-field="name"');
+    expect(html).toContain('data-private-field="email"');
+    expect(html).toContain('data-private-field="phone"');
     expect(html).not.toContain('Grace Hopper');
+  });
+
+  it('keeps the empty-state message out of PII masking', async () => {
+    fakeCms([]);
+    const response = await plugin.fetch(request('/__plugin/admin/contacts'), env());
+    const html = await renderedText(response);
+
+    expect(response.status).toBe(200);
+    expect(html).toContain('No contacts yet — create or import some.');
+    expect(html).toContain('<tr data-table-filter-empty>');
   });
 
   it('exports the search results as CSV', async () => {
@@ -163,6 +183,88 @@ describe('contacts admin', () => {
     const result = await response.json() as { contacts: Array<{ id: number; name: string }> };
     expect(result.contacts).toHaveLength(1);
     expect(result.contacts[0]).toMatchObject({ id: 12, name: 'Grace Hopper' });
+  });
+
+  it('renders the bulk-delete bar with row checkboxes for editors', async () => {
+    fakeCms([ADA, GRACE]);
+    const response = await plugin.fetch(request('/__plugin/admin/contacts'), env());
+    const html = await renderedText(response);
+
+    expect(html).toContain('id="contacts-bulk-form"');
+    expect(html).toContain('action="/admin/plugins/contacts/contacts/bulk-delete"');
+    expect(html).toContain('data-confirm="Delete the selected contacts?"');
+    expect(html).toContain('name="ids" value="11" form="contacts-bulk-form"');
+    expect(html).toContain('name="ids" value="12" form="contacts-bulk-form"');
+    expect(html).toContain('data-bulk-select-all');
+    expect(html).toContain('/admin/plugins/contacts/assets/contacts-bulk.js');
+  });
+
+  it('hides bulk delete from view-only users', async () => {
+    fakeCms([ADA]);
+    const response = await plugin.fetch(request('/__plugin/admin/contacts', {
+      headers: { 'x-plugin-secret': 'shared-secret', 'x-cms-user': JSON.stringify({ role: '', permissions: ['contacts:view'] }) },
+    }), env());
+    const html = await renderedText(response);
+
+    expect(response.status).toBe(200);
+    expect(html).toContain('Ada Lovelace');
+    expect(html).not.toContain('contacts-bulk-form');
+    expect(html).not.toContain('contacts-bulk.js');
+  });
+
+  it('bulk-deletes the selected contacts and redirects back to the search', async () => {
+    const { deletes } = fakeCms([ADA, GRACE]);
+    const response = await plugin.fetch(request('/__plugin/admin/contacts/bulk-delete', {
+      method: 'POST',
+      headers: { 'x-plugin-secret': 'shared-secret', 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams([['ids', '11'], ['ids', '12'], ['q', 'ada']]),
+    }), env());
+
+    expect(response.status).toBe(303);
+    const location = response.headers.get('Location') ?? '';
+    expect(location).toContain('/admin/plugins/contacts/contacts?');
+    expect(location).toContain('q=ada');
+    expect(location).toContain(encodeURIComponent('Deleted 2 contacts').replace(/%20/g, '+'));
+    expect(deletes).toEqual([[11, 12]]);
+  });
+
+  it('bounces an empty bulk-delete selection without calling the CMS', async () => {
+    const { deletes } = fakeCms([ADA]);
+    const response = await plugin.fetch(request('/__plugin/admin/contacts/bulk-delete', {
+      method: 'POST',
+      headers: { 'x-plugin-secret': 'shared-secret', 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(),
+    }), env());
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get('Location')).toContain('No');
+    expect(deletes).toEqual([]);
+  });
+
+  it('forbids bulk delete for users without write access', async () => {
+    const { deletes } = fakeCms([ADA]);
+    const response = await plugin.fetch(request('/__plugin/admin/contacts/bulk-delete', {
+      method: 'POST',
+      headers: {
+        'x-plugin-secret': 'shared-secret',
+        'x-cms-user': JSON.stringify({ role: '', permissions: ['contacts:view'] }),
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams([['ids', '11']]),
+    }), env());
+
+    expect(response.status).toBe(403);
+    expect(deletes).toEqual([]);
+  });
+
+  it('serves the bulk-selection script at the bare and admin asset paths', async () => {
+    fakeCms([]);
+    for (const path of ['/assets/contacts-bulk.js', '/__plugin/admin/assets/contacts-bulk.js']) {
+      const response = await plugin.fetch(request(path), env());
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('text/javascript');
+      expect(await response.text()).toContain('contacts-bulk-form');
+    }
   });
 
   it('denies viewers without contacts permissions', async () => {

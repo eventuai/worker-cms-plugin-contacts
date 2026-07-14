@@ -11,9 +11,20 @@ export interface ContactsAccess {
 }
 
 export function contactsAccessForRequest(request: Request): ContactsAccess {
-  const user = parseCmsUser(request.headers.get('x-cms-user')) as { role?: string; permissions?: string[] };
+  const header = request.headers.get('x-cms-user');
+  const user = parseCmsUser(header);
   const role = user.role ?? '';
-  const permissions = user.permissions ?? [];
+  // parseCmsUser only keeps id/email/name/role — read the permissions array
+  // straight from the header.
+  let permissions: string[] = [];
+  try {
+    const parsed = JSON.parse(header ?? '') as { permissions?: unknown };
+    if (Array.isArray(parsed.permissions)) {
+      permissions = parsed.permissions.filter((entry): entry is string => typeof entry === 'string');
+    }
+  } catch {
+    // No / malformed user header — handled by the trusted-call branch below.
+  }
   if (!role && !permissions.length) return { canView: true, canEdit: true };
   if (role === 'admin' || role === 'editor') return { canView: true, canEdit: true };
   const canEdit = permissions.includes('contacts:write');

@@ -16,8 +16,9 @@ export const ADMIN_BASE = `/admin/plugins/${PLUGIN_ID}`;
 const LIST_LIMIT = 200;
 const EXPORT_LIMIT = 500;
 
-export async function contactsIndex(cms: CmsClient, views: Fetcher, url: URL, jsonOnly = false): Promise<Response> {
+export async function contactsIndex(cms: CmsClient, views: Fetcher, url: URL, jsonOnly = false, canEdit = false): Promise<Response> {
   const q = (url.searchParams.get('q') ?? '').trim();
+  const flash = (url.searchParams.get('flash') ?? '').trim();
   const offset = Math.max(0, Number.parseInt(url.searchParams.get('offset') ?? '0', 10) || 0);
   const { pages, total } = await cms.list('contact', { q: q || undefined, limit: LIST_LIMIT, offset });
   const rows = pages.map((page) => contactRow(page));
@@ -32,6 +33,8 @@ export async function contactsIndex(cms: CmsClient, views: Fetcher, url: URL, js
 
   return adminView(views, 'Contacts', 'contacts', {
     q,
+    flash,
+    canEdit,
     rows,
     total,
     count: rows.length,
@@ -41,11 +44,35 @@ export async function contactsIndex(cms: CmsClient, views: Fetcher, url: URL, js
     prevHref: `${ADMIN_BASE}/contacts${params({ offset: String(Math.max(0, offset - LIST_LIMIT)) })}`,
     nextHref: `${ADMIN_BASE}/contacts${params({ offset: String(offset + LIST_LIMIT) })}`,
     searchAction: `${ADMIN_BASE}/contacts`,
+    bulkDeleteAction: `${ADMIN_BASE}/contacts/bulk-delete`,
     createHref: `/admin/pages/new?page_type=contact`,
     exportHref: `${ADMIN_BASE}/contacts/export${params({})}`,
     exportSampleHref: `${ADMIN_BASE}/contacts/export-sample`,
     importHref: `${ADMIN_BASE}/contacts/import`,
   }, jsonOnly);
+}
+
+// ── Bulk delete ────────────────────────────────────────────────────────────────
+
+/**
+ * POST bulk-delete: `ids` (repeated) from the list's checkboxes, plus the
+ * current `q` so the redirect lands back on the same search. The host's batch
+ * endpoint scopes deletes to this plugin's page types and soft-deletes to
+ * trash, so no page_type re-check is needed here.
+ */
+export async function bulkDeleteContacts(request: Request, cms: CmsClient): Promise<Response> {
+  const form = await request.formData();
+  const q = String(form.get('q') ?? '').trim();
+  const ids = [...new Set(form.getAll('ids').map((value) => Number(value)))]
+    .filter((id) => Number.isInteger(id) && id > 0);
+  const back = (flash: string): Response => {
+    const search = new URLSearchParams(q ? { q } : {});
+    search.set('flash', flash);
+    return redirect(`${ADMIN_BASE}/contacts?${search.toString()}`);
+  };
+  if (!ids.length) return back('No contacts selected');
+  await cms.batchRemove(ids);
+  return back(`Deleted ${ids.length} contact${ids.length === 1 ? '' : 's'}`);
 }
 
 // ── Export ─────────────────────────────────────────────────────────────────────
@@ -203,6 +230,10 @@ export async function searchJson(cms: CmsClient, url: URL): Promise<Response> {
 
 export function csvValue(value: string): string {
   return `"${value.replaceAll('"', '""')}"`;
+}
+
+function redirect(location: string): Response {
+  return new Response(null, { status: 303, headers: { Location: location } });
 }
 
 function csvResponse(body: string, filename: string): Response {
