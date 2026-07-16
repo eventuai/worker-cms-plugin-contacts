@@ -1,30 +1,30 @@
 <div class="flex items-center justify-between gap-4 mb-4">
   <div>
     <h1 class="text-2xl font-bold text-gray-900">Contacts</h1>
-    <p class="mt-1 text-sm text-gray-500">{{ total }} contact{% if total != 1 %}s{% endif %}{% if q != blank %} matching “{{ q | escape }}”{% endif %}</p>
+    <p class="mt-1 text-sm text-gray-500">{{ total }} contact{% if total != 1 %}s{% endif %}{% if q != blank %} matching “{{ q }}”{% endif %}</p>
   </div>
   <div class="flex flex-wrap gap-2">
-    <a class="inline-block px-4 py-2 rounded-lg text-sm font-semibold border border-transparent bg-white text-gray-700 border-gray-300 hover:bg-gray-50" href="{{ importHref | escape }}">Import</a>
-    <a class="inline-block px-4 py-2 rounded-lg text-sm font-semibold border border-transparent bg-white text-gray-700 border-gray-300 hover:bg-gray-50" href="{{ exportHref | escape }}">Export CSV</a>
-    <a class="inline-block px-4 py-2 rounded-lg text-sm font-semibold border border-transparent bg-indigo-600 text-white hover:bg-indigo-700" href="{{ createHref | escape }}">New contact</a>
+    <a class="inline-block px-4 py-2 rounded-lg text-sm font-semibold border border-transparent bg-white text-gray-700 border-gray-300 hover:bg-gray-50" href="{{ importHref }}">Import</a>
+    <a class="inline-block px-4 py-2 rounded-lg text-sm font-semibold border border-transparent bg-white text-gray-700 border-gray-300 hover:bg-gray-50" href="{{ exportHref }}">Export CSV</a>
+    <a class="inline-block px-4 py-2 rounded-lg text-sm font-semibold border border-transparent bg-indigo-600 text-white hover:bg-indigo-700" href="{{ createHref }}">New contact</a>
   </div>
 </div>
 
 {% if flash != blank %}
 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6" style="margin-bottom:1rem">
-  <p class="text-sm text-gray-700">{{ flash | escape }}</p>
+  <p class="text-sm text-gray-700">{{ flash }}</p>
 </div>
 {% endif %}
 
-<form method="get" action="{{ searchAction | escape }}" class="flex flex-wrap items-center gap-1.5 mb-4">
-  <input class="block px-3 py-2 border border-gray-300 rounded-lg text-sm flex-1" type="search" name="q" value="{{ q | escape }}" placeholder="Search name, email, organization, phone…">
+<form method="get" action="{{ searchAction }}" class="flex flex-wrap items-center gap-1.5 mb-4">
+  <input class="block px-3 py-2 border border-gray-300 rounded-lg text-sm flex-1" type="search" name="q" value="{{ q }}" placeholder="Search name, email, organization, phone…">
   <button class="inline-block px-4 py-2 rounded-lg text-sm font-semibold border border-transparent bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer" type="submit">Search</button>
-  {% if q != blank %}<a class="inline-block px-4 py-2 rounded-lg text-sm font-semibold border border-gray-300 bg-white text-gray-700 hover:bg-gray-50" href="{{ searchAction | escape }}">Clear</a>{% endif %}
+  {% if q != blank %}<a class="inline-block px-4 py-2 rounded-lg text-sm font-semibold border border-gray-300 bg-white text-gray-700 hover:bg-gray-50" href="{{ searchAction }}">Clear</a>{% endif %}
 </form>
 
 {% if canEdit and count > 0 %}
-<form id="contacts-bulk-form" method="post" action="{{ bulkDeleteAction | escape }}" data-confirm="Delete the selected contacts?" class="flex flex-wrap items-center justify-between gap-4 mb-4 bg-white rounded-xl shadow-sm border border-gray-200 p-3">
-  {% if q != blank %}<input type="hidden" name="q" value="{{ q | escape }}">{% endif %}
+<form id="contacts-bulk-form" method="post" action="{{ bulkDeleteAction }}" data-confirm="Delete the selected contacts?" class="flex flex-wrap items-center justify-between gap-4 mb-4 bg-white rounded-xl shadow-sm border border-gray-200 p-3">
+  {% if q != blank %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
   <div class="text-sm text-gray-500"><span data-bulk-count>0</span> selected</div>
   <button type="submit" data-bulk-submit class="inline-block px-4 py-2 rounded-lg text-sm font-semibold border border-transparent bg-red-600 text-white hover:bg-red-700 cursor-pointer">Delete selected</button>
 </form>
@@ -48,13 +48,13 @@
     <tbody class="divide-y divide-gray-100">
       {% for row in rows %}
       <tr>
-        {% if canEdit %}<td class="px-6 py-3"><input type="checkbox" name="ids" value="{{ row.id }}" form="contacts-bulk-form" data-bulk-checkbox aria-label="Select {{ row.name | escape }}" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"></td>{% endif %}
-        <td class="px-6 py-3 text-sm text-gray-700"><a class="text-indigo-600 font-medium hover:text-indigo-800" href="{{ row.editHref | escape }}" data-private-field="name">{{ row.name | escape }}</a>{% if row.title != blank %}<div class="text-xs text-gray-400">{{ row.title | escape }}</div>{% endif %}</td>
-        <td class="px-6 py-3 text-sm text-gray-700">{{ row.organization | escape }}</td>
-        <td class="px-6 py-3 text-sm text-gray-700"><span data-private-field="email">{{ row.email | escape }}</span>{% if row.emailStatus != blank %} <span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">{{ row.emailStatus | escape }}</span>{% endif %}</td>
-        <td class="px-6 py-3 text-sm text-gray-700"><span data-private-field="phone">{{ row.phone | escape }}</span></td>
-        <td class="px-6 py-3 text-sm text-gray-700">{{ row.region | escape }}</td>
-        <td class="px-6 py-3 text-right"><a class="text-indigo-600 font-medium hover:text-indigo-800" href="{{ row.editHref | escape }}">Edit</a></td>
+        {% if canEdit %}<td class="px-6 py-3"><input type="checkbox" name="ids" value="{{ row.id }}" form="contacts-bulk-form" data-bulk-checkbox aria-label="Select {{ row.name }}" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"></td>{% endif %}
+        <td class="px-6 py-3 text-sm text-gray-700"><a class="text-indigo-600 font-medium hover:text-indigo-800" href="{{ row.editHref }}" data-private-field="name">{{ row.name }}</a>{% if row.title != blank %}<div class="text-xs text-gray-400">{{ row.title }}</div>{% endif %}</td>
+        <td class="px-6 py-3 text-sm text-gray-700">{{ row.organization }}</td>
+        <td class="px-6 py-3 text-sm text-gray-700"><span data-private-field="email">{{ row.email }}</span>{% if row.emailStatus != blank %} <span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">{{ row.emailStatus }}</span>{% endif %}</td>
+        <td class="px-6 py-3 text-sm text-gray-700"><span data-private-field="phone">{{ row.phone }}</span></td>
+        <td class="px-6 py-3 text-sm text-gray-700">{{ row.region }}</td>
+        <td class="px-6 py-3 text-right"><a class="text-indigo-600 font-medium hover:text-indigo-800" href="{{ row.editHref }}">Edit</a></td>
       </tr>
       {% else %}
       <tr data-table-filter-empty><td colspan="{% if canEdit %}7{% else %}6{% endif %}" class="px-6 py-10 text-center text-sm text-gray-400">{% if q != blank %}No contacts match this search.{% else %}No contacts yet — create or import some.{% endif %}</td></tr>
@@ -65,9 +65,9 @@
 
 {% if hasPrev or hasNext %}
 <div class="flex items-center justify-between gap-4 mb-4" style="margin-top:1rem">
-  <div>{% if hasPrev %}<a class="text-indigo-600 font-medium hover:text-indigo-800 text-sm" href="{{ prevHref | escape }}">← Previous</a>{% endif %}</div>
+  <div>{% if hasPrev %}<a class="text-indigo-600 font-medium hover:text-indigo-800 text-sm" href="{{ prevHref }}">← Previous</a>{% endif %}</div>
   <div class="text-sm text-gray-500">Showing {{ offset | plus: 1 }}–{{ offset | plus: count }} of {{ total }}</div>
-  <div>{% if hasNext %}<a class="text-indigo-600 font-medium hover:text-indigo-800 text-sm" href="{{ nextHref | escape }}">Next →</a>{% endif %}</div>
+  <div>{% if hasNext %}<a class="text-indigo-600 font-medium hover:text-indigo-800 text-sm" href="{{ nextHref }}">Next →</a>{% endif %}</div>
 </div>
 {% endif %}
 
