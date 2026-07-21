@@ -20,7 +20,7 @@ run_worker_first = true
 # then become an optional legacy fallback tenant:
 #   wrangler kv key put --binding TENANTS "tenant:https://cms1.example.com" \
 #     '{"secret":"<32-byte hex, unique per CMS>"}'
-# [[kv_namespaces]]
-# binding = "TENANTS"
-# id = "REPLACE_WITH_ID_FROM_npm_run_kv_setup"
+[[kv_namespaces]]
+binding = "TENANTS"
+id = "13be6a93e2044f62a95880ca6ee303cd"
 # preview_id = "REPLACE_WITH_ID_FROM_npm_run_kv_setup_preview"
