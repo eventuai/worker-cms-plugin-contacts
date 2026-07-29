@@ -2,6 +2,7 @@
  "id": "contacts",
  "name": "Contacts Suite",
  "version": "0.1.0",
+ "autoTenant": true,
  "assets": [
   {
    "path": "/assets/contacts-bulk.js",
