@@ -17,10 +17,10 @@
     "liquidjs": "^10.27.2"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260719.1",
+    "@cloudflare/workers-types": "^5.20260729.1",
     "typescript": "^7.0.2",
-    "wrangler": "^4.112.0",
+    "wrangler": "^4.115.0",
     "vitest": "^4.1.10",
-    "@types/node": "^26.1.1"
+    "@types/node": "^26.1.2"
   }
 }
