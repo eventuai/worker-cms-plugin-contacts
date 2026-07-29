@@ -18,6 +18,10 @@ import {
   type CmsPage,
   type CmsPageInput,
 } from '@lionrockjs/worker-cms-plugin';
+import {
+  withCredits,
+  type CmsCreditMethods,
+} from '@lionrockjs/worker-cms-plugin-decorator-credits';
 
 /** Manifest id — must equal MANIFEST.id and the CMS-registered plugin id. */
 export const PLUGIN_ID = 'contacts';
@@ -35,6 +39,11 @@ export {
 };
 
 export class CmsClient extends BaseCmsClient {
+  declare credits: CmsCreditMethods['credits'];
+  declare creditQuote: CmsCreditMethods['creditQuote'];
+  declare chargeCredits: CmsCreditMethods['chargeCredits'];
+  declare reportCreditUsage: CmsCreditMethods['reportCreditUsage'];
+
   constructor(env: CmsClientEnv) {
     super({
       cmsUrl: env.CMS_URL,
@@ -42,6 +51,7 @@ export class CmsClient extends BaseCmsClient {
       pluginId: PLUGIN_ID,
       fetcher: (input, init) => globalThis.fetch(input, init),
     });
+    return withCredits(this);
   }
 }
 
