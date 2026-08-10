@@ -51,15 +51,18 @@ npm test
 npm run deploy
 ```
 
-## Register into the CMS (D1 URL transport — no service binding)
+## Register into the CMS (HTTPS URL transport — no service binding)
 
 1. `wrangler deploy` this Worker, then `wrangler secret put PLUGIN_SECRET`.
    (For email verification also: `wrangler secret put VERIFIER_API_KEY` and set
    `VERIFIER_API_URL` in `wrangler.toml`.)
-2. In the CMS: **Admin → Plugins → Register plugin**, paste this Worker's base URL.
-   (Requires `plugin:manage` and the same `PLUGIN_SECRET` on the CMS.)
+2. In the CMS: **Admin → Plugins → Register plugin**, paste this Worker's base URL
+   and configure this plugin's dedicated shared secret (requires `plugin:manage`).
 
-No `wrangler.toml` change or CMS redeploy needed.
+No `wrangler.toml` change or CMS redeploy is needed. The manifest is
+`trusted-ui` + `autoTenant`; Connect calls the Worker's enrollment endpoint and
+stores the per-CMS record in `TENANTS` KV. `CMS_URL` + `PLUGIN_SECRET` remain a
+single-tenant fallback for local development.
 
 ## Status
 

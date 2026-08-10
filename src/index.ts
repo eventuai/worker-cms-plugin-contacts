@@ -23,7 +23,14 @@ import { emailQualityIndex, setEmailStatus, submitToVerifier, type VerifierEnv }
 import { confirmImport, importForm, previewImport } from './import';
 import { contactQualityReport } from './reports';
 import { contactsAccessForRequest, forbidden } from './permissions';
-import { adminView, requireTenant, serveViewAsset, tenantClientEnv } from '@lionrockjs/worker-cms-plugin';
+import {
+  adminView,
+  handleTenantEnroll,
+  handleTenantRevoke,
+  requireTenant,
+  serveViewAsset,
+  tenantClientEnv,
+} from '@lionrockjs/worker-cms-plugin';
 
 interface PluginEnv extends VerifierEnv {
   PLUGIN_SECRET?: string;
@@ -40,6 +47,13 @@ export default {
   async fetch(request: Request, baseEnv: PluginEnv): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
+
+    if (path === '/__plugin/tenants/enroll') {
+      return handleTenantEnroll(request, baseEnv, { pluginId: MANIFEST.id });
+    }
+    if (path === '/__plugin/tenants/revoke') {
+      return handleTenantRevoke(request, baseEnv);
+    }
 
     // Secret-authenticated host calls resolve their tenant; downstream code
     // then runs against a tenant-scoped env, so every CmsClient built from
