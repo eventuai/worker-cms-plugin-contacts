@@ -1,0 +1,32 @@
+<div class="flex items-center justify-between gap-4 mb-4">
+  <div>
+    <a class="inline-block text-xs text-gray-500 mb-1 hover:text-indigo-700" href="{{ backHref }}">← Organizations</a>
+    <h1 class="text-2xl font-bold text-gray-900">Create organizations from contacts</h1>
+    <p class="mt-1 text-sm text-gray-500">Turns each contact position's organization name into a linked organization page. Names are matched ignoring case, punctuation and spacing.</p>
+  </div>
+</div>
+
+{% if hasPass %}
+<div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6" style="margin-bottom:1rem">
+  <h2 class="text-lg font-bold text-gray-900">Last pass</h2>
+  <p class="mt-1 text-sm text-gray-700">{{ pass.created }} organization{% if pass.created != 1 %}s{% endif %} created, {{ pass.peopleUpdated }} updated with new people, {{ pass.contactsLinked }} contact{% if pass.contactsLinked != 1 %}s{% endif %} linked.</p>
+  {% if stuck %}<p class="mt-1 text-sm text-red-600">This pass saved nothing while work remains. Check the positions below in the page editor before retrying.</p>{% endif %}
+</div>
+{% endif %}
+
+<div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6" style="margin-bottom:1rem">
+  {% if done %}
+  <p class="text-sm text-gray-700">Every contact position with an organization name is linked. Nothing left to do.</p>
+  {% else %}
+  <p class="text-sm text-gray-700">{{ positions }} position{% if positions != 1 %}s{% endif %} across {{ contacts }} contact{% if contacts != 1 %}s{% endif %} still need linking: {{ toCreate }} new organization{% if toCreate != 1 %}s{% endif %} to create, {{ toLink }} position{% if toLink != 1 %}s{% endif %} matching an existing one.</p>
+  {% if samples.size > 0 %}
+  <div class="flex flex-wrap gap-2" style="margin-top:0.75rem">
+    {% for name in samples %}<span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">{{ name }}</span>{% endfor %}
+  </div>
+  {% endif %}
+  <form method="post" action="{{ action }}" style="margin-top:1rem">
+    <button class="inline-block px-4 py-2 rounded-lg text-sm font-semibold border border-transparent bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer" type="submit">{% if hasPass %}Continue{% else %}Run{% endif %}</button>
+  </form>
+  <p class="mt-1 text-sm text-gray-500">Each run handles a bounded batch; continue until nothing is left. Re-running is safe.</p>
+  {% endif %}
+</div>

@@ -53,6 +53,21 @@ export class CmsClient extends BaseCmsClient {
     });
     return withCredits(this);
   }
+
+  /** Bulk partial-lect update through `PATCH /__cms/pages/batch` (≤ 100 per
+   *  call). The host merges, versions and commits the chunk atomically. */
+  async batchUpdate(inputs: Array<{ id: number; lect: Record<string, unknown> }>): Promise<void> {
+    if (!inputs.length) return;
+    const result = await this.request<{ errors: Array<{ index: number; error: string }> }>(
+      'PATCH',
+      '/pages/batch',
+      { body: { pages: inputs } },
+    );
+    if (result.errors.length) {
+      const first = result.errors[0];
+      throw new CmsApiError(400, first.error, 'PATCH', `/pages/batch[${first.index}]`);
+    }
+  }
 }
 
 /** Every email a contact carries: personal email items + per-position work emails. */
@@ -137,4 +152,51 @@ export function contactRow(page: CmsPage, language = 'en'): ContactRow {
 /** Case-insensitive name key used for duplicate detection and import matching. */
 export function contactNameKey(page: CmsPage): string {
   return contactDisplayName(page).trim().toLowerCase();
+}
+
+// ── Organizations ──────────────────────────────────────────────────────────────
+
+/** Name key for matching organizations: case, punctuation and spacing ignored. */
+export function organizationNameKey(name: string): string {
+  return name
+    .toLowerCase()
+    .replaceAll('&', ' and ')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+}
+
+export function organizationDisplayName(page: CmsPage, language = 'en'): string {
+  return localized(page.lect, 'name', language) || page.name;
+}
+
+/** People rows that actually link a contact (skips the blueprint's seeded empty row). */
+export function organizationPeople(lect: Record<string, unknown>): Array<{ contactId: string; role: string }> {
+  return items(lect, 'people')
+    .map((person) => ({ contactId: pointer(person, 'contact'), role: attr(person, 'role') }))
+    .filter((person) => person.contactId !== '');
+}
+
+export interface OrganizationRow {
+  id: number;
+  name: string;
+  legalName: string;
+  website: string;
+  email: string;
+  phone: string;
+  people: number;
+  editHref: string;
+}
+
+export function organizationRow(page: CmsPage, language = 'en'): OrganizationRow {
+  const lect = page.lect;
+  return {
+    id: page.id,
+    name: organizationDisplayName(page, language),
+    legalName: attr(lect, 'legal_name'),
+    website: attr(lect, 'website'),
+    email: attr(lect, 'general_email'),
+    phone: attr(lect, 'general_phone'),
+    people: organizationPeople(lect).length,
+    editHref: `/admin/pages/${page.id}/edit?return_to=${encodeURIComponent(`/admin/plugins/${PLUGIN_ID}/organizations`)}`,
+  };
 }

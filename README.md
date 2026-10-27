@@ -12,11 +12,16 @@ Part of the RSVP/contact port — see `cms/../cms-to-rsvp.md`. Pairs with
 
 - **Blueprint:** `contact` — multilingual names, 5 work positions, multiple
   emails/phones, 5 assistants, 8 social platforms, spouse, addresses,
-  `event_history`.
+  `event_history`. Each `position` may point (`*organization`) at its
+  organization.
+- **Blueprint:** `organization` — the generic company record: legal name,
+  registration/tax ids, website, general email/phone, addresses, and `people`
+  (`*contact` + role). Other plugins extend it with their own side-car types
+  instead of adding fields here (procurement's `supplier_profile` points at it).
 - **Taxonomies:** Contact Type, Industry, Interest, Food Allergies, Email
-  Status, Phone Status, Event.
-- **Nav (3 items):** Contacts, Email Quality, Contact Reports — sections of the
-  same plugin admin.
+  Status, Phone Status, Event; Organization Type, Industry for organizations.
+- **Nav (4 items):** Contacts, Organizations, Email Quality, Contact Reports —
+  sections of the same plugin admin.
 
 ## Admin sections
 
@@ -31,6 +36,13 @@ Part of the RSVP/contact port — see `cms/../cms-to-rsvp.md`. Pairs with
 - **JSON endpoints** — `contacts/check-duplicate.json?email=&name=` (legacy
   check_duplicate) and `contacts/search.json?q=` (typeahead; the events
   plugin's add-from-contacts page can call it same-origin via the admin proxy).
+- **Organizations** (`…/organizations`) — list + search,
+  `organizations/search.json?q=` typeahead, and **Create from contacts**
+  (`organizations/backfill`): turns position `organization_name` text into
+  organization pages, matched by a case/punctuation-insensitive name key
+  against names and legal names, and links both ways (position pointer +
+  `people` row). Bounded passes (≤ 300 page writes), re-run until done;
+  re-running is a no-op.
 - **Email Quality** (`…/email-quality`) — status counts, unverified list,
   per-email search, manual status set, and a batch **submit-to-verifier**
   (generic `POST {emails:[…]}` with a bearer key). Status lives on the contact
@@ -72,6 +84,7 @@ single-tenant fallback for local development.
 - [x] Duplicate detection + typeahead JSON
 - [x] Email quality (heuristic + external verifier + manual statuses)
 - [x] Contact-quality tier report
+- [x] `organization` type, list/typeahead, backfill from contact positions
 - [ ] Taxonomy-tag import/assignment (needs Plugin API tag-name resolution)
 - [ ] User-usage report (needs host audit access)
 

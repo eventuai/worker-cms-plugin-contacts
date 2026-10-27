@@ -9,6 +9,8 @@
 //
 //   contacts       — list + search, CSV export (+ sample), CSV/VCF import
 //                    (preview → confirm), duplicate check, typeahead JSON
+//   organizations  — generic company records (list, typeahead, backfill
+//                    from contact positions) other plugins extend
 //   email-quality  — verification status over every contact's emails
 //   reports        — contact-quality tier analysis
 //
@@ -22,6 +24,7 @@ import { ADMIN_BASE, bulkDeleteContacts, checkDuplicate, contactsIndex, exportCo
 import { emailQualityIndex, setEmailStatus, submitToVerifier, type VerifierEnv } from './email-quality';
 import { confirmImport, importForm, previewImport } from './import';
 import { contactQualityReport } from './reports';
+import { backfillPass, backfillPreview, organizationsIndex, organizationsSearchJson } from './organizations';
 import { contactsAccessForRequest, forbidden } from './permissions';
 import {
   adminView,
@@ -145,6 +148,17 @@ async function handleAdmin(request: Request, env: PluginEnv, url: URL): Promise<
       if (request.method === 'POST') return previewImport(request, cms, env.VIEWS, jsonOnly);
       return importForm(env.VIEWS, jsonOnly);
     }
+  }
+
+  if (section === 'organizations') {
+    const sub = segments[1] ?? '';
+    if (sub === 'search.json') return organizationsSearchJson(cms, url);
+    if (sub === 'backfill') {
+      if (!access.canEdit) return forbidden();
+      if (request.method === 'POST') return backfillPass(cms, env.VIEWS, jsonOnly);
+      return backfillPreview(cms, env.VIEWS, jsonOnly);
+    }
+    return organizationsIndex(cms, env.VIEWS, url, jsonOnly);
   }
 
   if (section === 'email-quality') {

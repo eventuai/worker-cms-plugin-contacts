@@ -61,8 +61,9 @@ interface FakePage {
 }
 
 /** Fake Plugin API: GET /pages list (with naive q over JSON), GET/PUT /pages/:id, POST/DELETE /pages/batch. */
-function fakeCms(pages: FakePage[]) {
+function fakeCms(pages: FakePage[], options: { persist?: boolean } = {}) {
   const puts: Array<{ id: number; body: Record<string, unknown> }> = [];
+  const patches: Array<Array<{ id: number; lect: Record<string, unknown> }>> = [];
   const batches: Array<Record<string, unknown>> = [];
   const deletes: number[][] = [];
   const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -85,7 +86,18 @@ function fakeCms(pages: FakePage[]) {
       const body = JSON.parse(String(init.body)) as Record<string, unknown>;
       batches.push(body);
       const inputs = body.pages as Array<Record<string, unknown>>;
-      return Response.json({ pages: inputs.map((page, index) => ({ id: 900 + index, ...page })) });
+      const created = inputs.map((page, index) => ({ id: 900 + batches.length * 100 + index, ...page }));
+      if (options.persist) pages.push(...created as unknown as FakePage[]);
+      return Response.json({ pages: created, created, errors: [] });
+    }
+    if (url.pathname === '/__cms/pages/batch' && init?.method === 'PATCH') {
+      const body = JSON.parse(String(init.body)) as { pages: Array<{ id: number; lect: Record<string, unknown> }> };
+      patches.push(body.pages);
+      for (const patch of body.pages) {
+        const page = pages.find((entry) => entry.id === patch.id);
+        if (page) page.lect = { ...page.lect, ...patch.lect };
+      }
+      return Response.json({ updated: body.pages, errors: [], count: body.pages.length });
     }
     const idMatch = url.pathname.match(/^\/__cms\/pages\/(\d+)$/);
     if (idMatch && init?.method === 'PUT') {
@@ -99,7 +111,7 @@ function fakeCms(pages: FakePage[]) {
     return new Response('not found', { status: 404 });
   });
   vi.stubGlobal('fetch', fetcher);
-  return { puts, batches, deletes, fetcher };
+  return { puts, batches, deletes, patches, fetcher };
 }
 
 function contact(id: number, name: string, lect: Record<string, unknown> = {}): FakePage {
@@ -271,6 +283,79 @@ describe('contacts admin', () => {
     fakeCms([]);
     const response = await plugin.fetch(request('/__plugin/admin/contacts', {
       headers: { 'x-plugin-secret': 'shared-secret', 'x-cms-user': JSON.stringify({ role: 'viewer', permissions: [] }) },
+    }), env());
+    expect(response.status).toBe(403);
+  });
+});
+
+describe('organizations', () => {
+  function organization(id: number, name: string, lect: Record<string, unknown> = {}): FakePage {
+    return { id, page_type: 'organization', name, lect: { name: { en: name }, ...lect } };
+  }
+
+  it('lists and searches organizations with people counts', async () => {
+    fakeCms([
+      organization(31, 'Analytical Engines', { website: 'https://ae.example', people: [{ _pointers: { contact: '11' } }, {}] }),
+      organization(32, 'Navy'),
+    ]);
+    const response = await plugin.fetch(request('/__plugin/admin/organizations?q=analytical'), env());
+    const html = await renderedText(response);
+    expect(html).toContain('Analytical Engines');
+    expect(html).toContain('https://ae.example');
+    expect(html).not.toContain('>Navy<');
+    // The blueprint's seeded empty people row is not a person.
+    expect(html).toMatch(/<td[^>]*>1<\/td>/);
+  });
+
+  it('serves the organization typeahead JSON', async () => {
+    fakeCms([organization(31, 'Analytical Engines', { legal_name: 'Analytical Engines Ltd' })]);
+    const response = await plugin.fetch(request('/__plugin/admin/organizations/search.json?q=engines'), env());
+    expect(await response.json()).toEqual({
+      organizations: [{ id: 31, name: 'Analytical Engines', legalName: 'Analytical Engines Ltd', website: '' }],
+    });
+  });
+
+  it('previews the backfill without writing', async () => {
+    const { batches, patches } = fakeCms([structuredClone(ADA), structuredClone(GRACE), organization(32, 'NAVY')]);
+    const response = await plugin.fetch(request('/__plugin/admin/organizations/backfill?json=1'), env());
+    const { data } = await response.json() as { data: Record<string, unknown> };
+    expect(data).toMatchObject({ positions: 2, contacts: 2, toCreate: 1, toLink: 1, samples: ['Analytical Engines'] });
+    expect(batches).toHaveLength(0);
+    expect(patches).toHaveLength(0);
+  });
+
+  it('creates missing organizations, links both ways, and is idempotent', async () => {
+    const pages = [structuredClone(ADA), structuredClone(GRACE), organization(32, 'NAVY')];
+    const { batches, patches } = fakeCms(pages, { persist: true });
+
+    const first = await plugin.fetch(request('/__plugin/admin/organizations/backfill?json=1', { method: 'POST' }), env());
+    const { data } = await first.json() as { data: Record<string, unknown> };
+    expect(data).toMatchObject({ done: true, pass: { created: 1, peopleUpdated: 1, contactsLinked: 2 } });
+
+    const created = pages.find((page) => page.page_type === 'organization' && page.name === 'Analytical Engines')!;
+    expect(batches[0].pages).toEqual([{
+      page_type: 'organization',
+      name: 'Analytical Engines',
+      lect: { name: { en: 'Analytical Engines' }, people: [{ role: 'Director', _pointers: { contact: '11' } }] },
+    }]);
+    const navy = pages.find((page) => page.id === 32)!;
+    expect(navy.lect.people).toEqual([{ role: '', _pointers: { contact: '12' } }]);
+    const ada = pages.find((page) => page.id === 11)!;
+    expect((ada.lect.position as Array<Record<string, unknown>>)[0]._pointers).toEqual({ organization: String(created.id) });
+    const grace = pages.find((page) => page.id === 12)!;
+    expect((grace.lect.position as Array<Record<string, unknown>>)[0]._pointers).toEqual({ organization: '32' });
+
+    const writes = batches.length + patches.length;
+    const again = await plugin.fetch(request('/__plugin/admin/organizations/backfill?json=1', { method: 'POST' }), env());
+    expect(await again.json()).toMatchObject({ data: { done: true, pass: { wrote: 0 } } });
+    expect(batches.length + patches.length).toBe(writes);
+  });
+
+  it('forbids the backfill for users without write access', async () => {
+    fakeCms([]);
+    const response = await plugin.fetch(request('/__plugin/admin/organizations/backfill', {
+      method: 'POST',
+      headers: { 'x-cms-user': JSON.stringify({ id: 'u1', role: 'viewer', permissions: ['contacts:view'] }) },
     }), env());
     expect(response.status).toBe(403);
   });
