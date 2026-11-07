@@ -19,7 +19,10 @@ Part of the RSVP/contact port — see `cms/../cms-to-rsvp.md`. Pairs with
   (`*contact` + role). Other plugins extend it with their own side-car types
   instead of adding fields here (procurement's `supplier_profile` points at it).
 - **Taxonomies:** Contact Type, Industry, Interest, Food Allergies, Email
-  Status, Phone Status, Event; Organization Type, Industry for organizations.
+  Status, Phone Status, Event, Department, Role; Organization Type, Industry for
+  organizations. Department and Role tag who a contact is for filtering (e.g.
+  the e-form department heads); which company, department and title go
+  together stays in each position's text, which search matches.
 - **Nav (4 items):** Contacts, Organizations, Email Quality, Contact Reports —
   sections of the same plugin admin.
 

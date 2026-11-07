@@ -191,7 +191,9 @@
     "Food Allergies",
     "Email Status",
     "Phone Status",
-    "Event"
+    "Event",
+    "Department",
+    "Role"
    ],
    "organization": [
     "Organization Type",
