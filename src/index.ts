@@ -9,8 +9,9 @@
 //
 //   contacts       — list + search, CSV export (+ sample), CSV/VCF import
 //                    (preview → confirm), duplicate check, typeahead JSON
-//   organizations  — generic company records (list, typeahead, backfill
-//                    from contact positions) other plugins extend
+//   organizations  — generic company records (list, typeahead, CSV
+//                    export + import, backfill from contact positions)
+//                    other plugins extend
 //   email-quality  — verification status over every contact's emails
 //   reports        — contact-quality tier analysis
 //
@@ -25,6 +26,13 @@ import { emailQualityIndex, setEmailStatus, submitToVerifier, type VerifierEnv }
 import { confirmImport, importForm, previewImport } from './import';
 import { contactQualityReport } from './reports';
 import { backfillPass, backfillPreview, organizationsIndex, organizationsSearchJson } from './organizations';
+import {
+  confirmOrganizationImport,
+  exportOrganizations,
+  exportOrganizationsSample,
+  organizationImportForm,
+  previewOrganizationImport,
+} from './organization-import';
 import { contactsAccessForRequest, forbidden } from './permissions';
 import {
   adminView,
@@ -126,16 +134,17 @@ async function handleAdmin(request: Request, env: PluginEnv, url: URL): Promise<
   }
 
   const access = contactsAccessForRequest(request);
-  if (!access.canView) return forbidden();
+  if (!access.canRead) return forbidden();
+  const canImport = access.canCreate || access.canUpdate;
   const jsonOnly = wantsJson(url);
   const cms = new CmsClient(env);
   const section = segments[0] || 'contacts';
 
   if (section === 'contacts') {
     const sub = segments[1] ?? '';
-    if (!sub) return contactsIndex(cms, env.VIEWS, url, jsonOnly, access.canEdit);
+    if (!sub) return contactsIndex(cms, env.VIEWS, url, access, jsonOnly);
     if (sub === 'bulk-delete' && request.method === 'POST') {
-      if (!access.canEdit) return forbidden();
+      if (!access.canDelete) return forbidden();
       return bulkDeleteContacts(request, cms);
     }
     if (sub === 'export') return exportContacts(cms, url);
@@ -143,9 +152,9 @@ async function handleAdmin(request: Request, env: PluginEnv, url: URL): Promise<
     if (sub === 'check-duplicate.json') return checkDuplicate(cms, url);
     if (sub === 'search.json') return searchJson(cms, url);
     if (sub === 'import') {
-      if (!access.canEdit) return forbidden();
-      if (segments[2] === 'confirm' && request.method === 'POST') return confirmImport(request, cms);
-      if (request.method === 'POST') return previewImport(request, cms, env.VIEWS, jsonOnly);
+      if (!canImport) return forbidden();
+      if (segments[2] === 'confirm' && request.method === 'POST') return confirmImport(request, cms, access);
+      if (request.method === 'POST') return previewImport(request, cms, env.VIEWS, access, jsonOnly);
       return importForm(env.VIEWS, jsonOnly);
     }
   }
@@ -153,21 +162,30 @@ async function handleAdmin(request: Request, env: PluginEnv, url: URL): Promise<
   if (section === 'organizations') {
     const sub = segments[1] ?? '';
     if (sub === 'search.json') return organizationsSearchJson(cms, url);
+    if (sub === 'export') return exportOrganizations(cms, url);
+    if (sub === 'export-sample') return exportOrganizationsSample();
+    if (sub === 'import') {
+      if (!canImport) return forbidden();
+      if (segments[2] === 'confirm' && request.method === 'POST') return confirmOrganizationImport(request, cms, access);
+      if (request.method === 'POST') return previewOrganizationImport(request, cms, env.VIEWS, access, jsonOnly);
+      return organizationImportForm(env.VIEWS, jsonOnly);
+    }
     if (sub === 'backfill') {
-      if (!access.canEdit) return forbidden();
+      // Creates organizations and updates contact positions.
+      if (!access.canCreate || !access.canUpdate) return forbidden();
       if (request.method === 'POST') return backfillPass(cms, env.VIEWS, jsonOnly);
       return backfillPreview(cms, env.VIEWS, jsonOnly);
     }
-    return organizationsIndex(cms, env.VIEWS, url, jsonOnly);
+    return organizationsIndex(cms, env.VIEWS, url, access, jsonOnly);
   }
 
   if (section === 'email-quality') {
     if (segments[1] === 'status' && request.method === 'POST') {
-      if (!access.canEdit) return forbidden();
+      if (!access.canUpdate) return forbidden();
       return setEmailStatus(request, cms);
     }
     if (segments[1] === 'submit' && request.method === 'POST') {
-      if (!access.canEdit) return forbidden();
+      if (!access.canUpdate) return forbidden();
       return submitToVerifier(cms, env);
     }
     return emailQualityIndex(cms, env.VIEWS, env, url, jsonOnly);
@@ -177,7 +195,7 @@ async function handleAdmin(request: Request, env: PluginEnv, url: URL): Promise<
     return contactQualityReport(cms, env.VIEWS, jsonOnly);
   }
 
-  return contactsIndex(cms, env.VIEWS, new URL(`${url.origin}${ADMIN_BASE}/contacts`), jsonOnly, access.canEdit);
+  return contactsIndex(cms, env.VIEWS, new URL(`${url.origin}${ADMIN_BASE}/contacts`), access, jsonOnly);
 }
 
 function wantsJson(url: URL): boolean {

@@ -43,6 +43,19 @@ Part of the RSVP/contact port — see `cms/../cms-to-rsvp.md`. Pairs with
   against names and legal names, and links both ways (position pointer +
   `people` row). Bounded passes (≤ 300 page writes), re-run until done;
   re-running is a no-op.
+  **CSV export/import** (`organizations/export`, `export-sample`,
+  `organizations/import`, `src/organization-import.ts`) with the same preview →
+  confirm flow: rows match by `organization_id` (CMS page id) → registration
+  no. → tax ID → name/legal-name key; an export re-imports as all-unchanged.
+  `people` links are not in the CSV and are never changed by an import.
+- **Permissions** — `contacts:read`, `contacts:create`, `contacts:update`,
+  `contacts:delete` (grant them to roles in the CMS Roles admin; a non-admin
+  also needs the host's `plugin:access`). They cover contacts and
+  organizations; any write permission implies read. Import needs create for
+  new rows and update for changed rows, backfill needs both, bulk delete needs
+  delete, and email-status changes need update. Admins get everything. They
+  gate this plugin's screens only: editing a contact in the CMS page editor is
+  governed by the host's own `content:*` permissions.
 - **Email Quality** (`…/email-quality`) — status counts, unverified list,
   per-email search, manual status set, and a batch **submit-to-verifier**
   (generic `POST {emails:[…]}` with a bearer key). Status lives on the contact

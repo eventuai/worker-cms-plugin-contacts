@@ -1,0 +1,4 @@
+{
+  "sections": { "main": { "type": "organization-import" } },
+  "order": ["main"]
+}

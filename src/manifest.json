@@ -4,6 +4,24 @@
  "version": "0.1.0",
  "trustLevel": "trusted-ui",
  "autoTenant": true,
+ "permissions": [
+  {
+   "value": "contacts:read",
+   "label": "Contacts: view and export contacts and organizations"
+  },
+  {
+   "value": "contacts:create",
+   "label": "Contacts: create and import new contacts and organizations"
+  },
+  {
+   "value": "contacts:update",
+   "label": "Contacts: edit contacts and organizations, including import updates"
+  },
+  {
+   "value": "contacts:delete",
+   "label": "Contacts: delete contacts"
+  }
+ ],
  "assets": [
   {
    "path": "/assets/contacts-bulk.js",
@@ -13,19 +31,11 @@
  "nav": [
   {
    "label": "Contacts",
-   "href": "contacts",
-   "roles": [
-    "admin",
-    "editor"
-   ]
+   "href": "contacts"
   },
   {
    "label": "Organizations",
-   "href": "organizations",
-   "roles": [
-    "admin",
-    "editor"
-   ]
+   "href": "organizations"
   },
   {
    "label": "Email Quality",

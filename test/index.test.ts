@@ -214,7 +214,7 @@ describe('contacts admin', () => {
   it('hides bulk delete from view-only users', async () => {
     fakeCms([ADA]);
     const response = await plugin.fetch(request('/__plugin/admin/contacts', {
-      headers: { 'x-plugin-secret': 'shared-secret', 'x-cms-user': JSON.stringify({ role: '', permissions: ['contacts:view'] }) },
+      headers: { 'x-plugin-secret': 'shared-secret', 'x-cms-user': JSON.stringify({ role: '', permissions: ['contacts:read'] }) },
     }), env());
     const html = await renderedText(response);
 
@@ -259,7 +259,7 @@ describe('contacts admin', () => {
       method: 'POST',
       headers: {
         'x-plugin-secret': 'shared-secret',
-        'x-cms-user': JSON.stringify({ role: '', permissions: ['contacts:view'] }),
+        'x-cms-user': JSON.stringify({ role: '', permissions: ['contacts:read'] }),
         'content-type': 'application/x-www-form-urlencoded',
       },
       body: new URLSearchParams([['ids', '11']]),
@@ -355,7 +355,7 @@ describe('organizations', () => {
     fakeCms([]);
     const response = await plugin.fetch(request('/__plugin/admin/organizations/backfill', {
       method: 'POST',
-      headers: { 'x-cms-user': JSON.stringify({ id: 'u1', role: 'viewer', permissions: ['contacts:view'] }) },
+      headers: { 'x-cms-user': JSON.stringify({ id: 'u1', role: 'viewer', permissions: ['contacts:read'] }) },
     }), env());
     expect(response.status).toBe(403);
   });
@@ -516,5 +516,204 @@ describe('reports', () => {
     expect(html).toContain('Ada Lovelace');
     expect(html).toContain('Grace Hopper');
     expect(html).toContain('4 contacts');
+  });
+});
+
+describe('organization import/export', () => {
+  function organization(id: number, name: string, lect: Record<string, unknown> = {}): FakePage {
+    return { id, page_type: 'organization', name, lect: { name: { en: name }, ...lect } };
+  }
+
+  const AE = organization(31, 'Analytical Engines', {
+    legal_name: 'Analytical Engines Ltd',
+    registration_no: '12345678',
+    website: 'https://ae.example',
+    address: [{ type: 'office', address: { en: '1 Example Road' } }],
+    people: [{ _pointers: { contact: '11' } }],
+  });
+
+  function form(path: string, fields: Record<string, string>, user?: Record<string, unknown>): Request {
+    const headers: Record<string, string> = { 'x-plugin-secret': 'shared-secret', 'content-type': 'application/x-www-form-urlencoded' };
+    if (user) headers['x-cms-user'] = JSON.stringify(user);
+    return request(path, { method: 'POST', headers, body: new URLSearchParams(fields) });
+  }
+
+  it('exports organizations as CSV', async () => {
+    fakeCms([structuredClone(AE), organization(32, 'Navy')]);
+    const response = await plugin.fetch(request('/__plugin/admin/organizations/export'), env());
+    expect(response.headers.get('content-type')).toContain('text/csv');
+    const lines = (await response.text()).split('\n');
+    expect(lines[0]).toContain('"organization_id","name","name_zh_hant"');
+    expect(lines[1]).toContain('"31","Analytical Engines"');
+    expect(lines[1]).toContain('"Analytical Engines Ltd","12345678"');
+    expect(lines[1]).toContain('"office","1 Example Road"');
+    expect(lines).toHaveLength(3);
+  });
+
+  it('serves a sample CSV that previews as one new organization', async () => {
+    fakeCms([]);
+    const sample = await (await plugin.fetch(request('/__plugin/admin/organizations/export-sample'), env())).text();
+    const html = await renderedText(await plugin.fetch(form('/__plugin/admin/organizations/import', { raw: sample }), env()));
+    expect(html).toContain('1 new · 0 updated · 0 unchanged');
+    expect(html).toContain('Analytical Engines');
+  });
+
+  it('re-importing an export is all unchanged', async () => {
+    fakeCms([structuredClone(AE), organization(32, 'Navy')]);
+    const csv = await (await plugin.fetch(request('/__plugin/admin/organizations/export'), env())).text();
+    const html = await renderedText(await plugin.fetch(form('/__plugin/admin/organizations/import', { raw: csv }), env()));
+    expect(html).toContain('0 new · 0 updated · 2 unchanged');
+  });
+
+  it('previews new vs update without writing, matching by registration no. and name', async () => {
+    const { batches, patches } = fakeCms([structuredClone(AE), organization(32, 'Navy')]);
+    const csv = [
+      'name,legal_name,registration_no,website',
+      'AE Renamed,,12345678,https://new.example',
+      'NAVY,,,https://navy.example',
+      'Bletchley Park,,,',
+    ].join('\n');
+    const html = await renderedText(await plugin.fetch(form('/__plugin/admin/organizations/import', { raw: csv }), env()));
+    expect(html).toContain('1 new · 2 updated · 0 unchanged');
+    expect(html).toContain('https://new.example');
+    expect(batches).toHaveLength(0);
+    expect(patches).toHaveLength(0);
+  });
+
+  it('confirm creates new organizations and batch-updates matches without touching people', async () => {
+    const pages = [structuredClone(AE)];
+    const { batches, patches } = fakeCms(pages);
+    const csv = ['organization_id,name,website', '31,Analytical Engines,https://new.example', ',Bletchley Park,'].join('\n');
+    const response = await plugin.fetch(form('/__plugin/admin/organizations/import/confirm', { raw: csv, mode: 'new_and_update' }), env());
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get('Location')).toContain('/admin/plugins/contacts/organizations?flash=');
+    expect(batches).toHaveLength(1);
+    expect(batches[0].pages).toEqual([{ page_type: 'organization', name: 'Bletchley Park', lect: { name: { en: 'Bletchley Park' } } }]);
+    expect(patches).toEqual([[{ id: 31, lect: { website: 'https://new.example', name: { en: 'Analytical Engines' } } }]]);
+    expect(pages[0].lect.people).toEqual([{ _pointers: { contact: '11' } }]);
+  });
+
+  it('honours the new-only and update-only modes', async () => {
+    const csv = ['organization_id,name,website', '31,Analytical Engines,https://new.example', ',Bletchley Park,'].join('\n');
+    let cms = fakeCms([structuredClone(AE)]);
+    await plugin.fetch(form('/__plugin/admin/organizations/import/confirm', { raw: csv, mode: 'new_only' }), env());
+    expect(cms.batches).toHaveLength(1);
+    expect(cms.patches).toHaveLength(0);
+
+    vi.unstubAllGlobals();
+    cms = fakeCms([structuredClone(AE)]);
+    await plugin.fetch(form('/__plugin/admin/organizations/import/confirm', { raw: csv, mode: 'update_only' }), env());
+    expect(cms.batches).toHaveLength(0);
+    expect(cms.patches).toHaveLength(1);
+  });
+
+  it('shows import and export on the organizations list', async () => {
+    fakeCms([structuredClone(AE)]);
+    const html = await renderedText(await plugin.fetch(request('/__plugin/admin/organizations?q=engines'), env()));
+    expect(html).toContain('href="/admin/plugins/contacts/organizations/import"');
+    expect(html).toContain('href="/admin/plugins/contacts/organizations/export?q=engines"');
+  });
+});
+
+describe('contact CRUD permissions', () => {
+  const as = (permissions: string[], role = 'staff') => JSON.stringify({ id: 'u1', role, permissions });
+
+  function get(path: string, user: string): Request {
+    return request(path, { headers: { 'x-plugin-secret': 'shared-secret', 'x-cms-user': user } });
+  }
+
+  function post(path: string, user: string, fields: Record<string, string> | string[][]): Request {
+    return request(path, {
+      method: 'POST',
+      headers: { 'x-plugin-secret': 'shared-secret', 'x-cms-user': user, 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(fields),
+    });
+  }
+
+  it('declares contacts:read/create/update/delete in the manifest', async () => {
+    const manifest = await (await plugin.fetch(request('/__plugin/manifest'), env())).json() as { permissions: Array<{ value: string }> };
+    expect(manifest.permissions.map((entry) => entry.value)).toEqual([
+      'contacts:read', 'contacts:create', 'contacts:update', 'contacts:delete',
+    ]);
+  });
+
+  it('read-only users see lists and exports but no create/import/edit/delete controls', async () => {
+    fakeCms([ADA, { id: 31, page_type: 'organization', name: 'AE', lect: { name: { en: 'AE' } } }]);
+    const user = as(['contacts:read']);
+    const contactsHtml = await renderedText(await plugin.fetch(get('/__plugin/admin/contacts', user), env()));
+    expect(contactsHtml).toContain('Ada Lovelace');
+    expect(contactsHtml).toContain('Export CSV');
+    expect(contactsHtml).not.toContain('New contact');
+    expect(contactsHtml).not.toContain('>Import<');
+    expect(contactsHtml).not.toContain('>Edit<');
+    expect(contactsHtml).not.toContain('contacts-bulk-form');
+
+    const orgHtml = await renderedText(await plugin.fetch(get('/__plugin/admin/organizations', user), env()));
+    expect(orgHtml).toContain('Export CSV');
+    expect(orgHtml).not.toContain('New organization');
+    expect(orgHtml).not.toContain('>Import<');
+    expect(orgHtml).not.toContain('Create from contacts');
+
+    expect((await plugin.fetch(get('/__plugin/admin/contacts/export', user), env())).status).toBe(200);
+    expect((await plugin.fetch(get('/__plugin/admin/organizations/export', user), env())).status).toBe(200);
+    expect((await plugin.fetch(get('/__plugin/admin/contacts/import', user), env())).status).toBe(403);
+    expect((await plugin.fetch(get('/__plugin/admin/organizations/import', user), env())).status).toBe(403);
+  });
+
+  it('a write permission implies read', async () => {
+    fakeCms([ADA]);
+    const response = await plugin.fetch(get('/__plugin/admin/contacts', as(['contacts:delete'])), env());
+    expect(response.status).toBe(200);
+  });
+
+  it('bulk delete needs contacts:delete, not update', async () => {
+    const { deletes } = fakeCms([ADA]);
+    const denied = await plugin.fetch(post('/__plugin/admin/contacts/bulk-delete', as(['contacts:update']), [['ids', '11']]), env());
+    expect(denied.status).toBe(403);
+    const allowed = await plugin.fetch(post('/__plugin/admin/contacts/bulk-delete', as(['contacts:delete']), [['ids', '11']]), env());
+    expect(allowed.status).toBe(303);
+    expect(deletes).toEqual([[11]]);
+  });
+
+  it('create-only users may import new rows but not apply updates', async () => {
+    const csv = 'contact_id,full_name\nC-1001,Ada Lovelace\nC-3003,Alan Turing';
+    const { batches, puts } = fakeCms([ADA]);
+    const user = as(['contacts:create']);
+
+    const preview = await plugin.fetch(post('/__plugin/admin/contacts/import?json=1', user, { raw: csv }), env());
+    const { data } = await preview.json() as { data: { modes: Array<{ value: string }> } };
+    expect(data.modes.map((mode) => mode.value)).toEqual(['new_only']);
+
+    const denied = await plugin.fetch(post('/__plugin/admin/contacts/import/confirm', user, { raw: csv, mode: 'new_and_update' }), env());
+    expect(denied.status).toBe(403);
+    expect(batches).toHaveLength(0);
+
+    const allowed = await plugin.fetch(post('/__plugin/admin/contacts/import/confirm', user, { raw: csv, mode: 'new_only' }), env());
+    expect(allowed.status).toBe(303);
+    expect(batches).toHaveLength(1);
+    expect(puts).toHaveLength(0);
+  });
+
+  it('update-only users may not create organizations through import', async () => {
+    const { batches } = fakeCms([]);
+    const response = await plugin.fetch(post('/__plugin/admin/organizations/import/confirm', as(['contacts:update']), {
+      raw: 'name\nBletchley Park', mode: 'new_only',
+    }), env());
+    expect(response.status).toBe(403);
+    expect(batches).toHaveLength(0);
+  });
+
+  it('the email-quality status change needs contacts:update', async () => {
+    fakeCms([ADA]);
+    const response = await plugin.fetch(post('/__plugin/admin/email-quality/status', as(['contacts:read']), { id: '11', status: 'valid' }), env());
+    expect(response.status).toBe(403);
+  });
+
+  it('admins keep full access whatever permissions are forwarded', async () => {
+    fakeCms([ADA]);
+    const html = await renderedText(await plugin.fetch(get('/__plugin/admin/contacts', as([], 'editor,admin')), env()));
+    expect(html).toContain('New contact');
+    expect(html).toContain('contacts-bulk-form');
   });
 });

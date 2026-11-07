@@ -17,6 +17,7 @@
 
 import { CmsClient, attr, contactDisplayName, contactEmails, items, localized, type CmsPage, type CmsPageInput } from './cms';
 import { ADMIN_BASE } from './contacts';
+import { forbidden, importModeAllowed, importModes, type ContactsAccess } from './permissions';
 import { adminView } from '@lionrockjs/worker-cms-plugin';
 
 const IMPORT_CHUNK = 25;
@@ -24,13 +25,17 @@ const MATCH_FETCH_LIMIT = 500;
 
 // ── Incoming shape ─────────────────────────────────────────────────────────────
 
-interface IncomingContact {
-  /** Legacy export contact_id, stored as the `id` attr. */
-  legacyId: string;
+/** The lect projection an import writes: attrs, localized values, item groups. */
+export interface IncomingFields {
   attrs: Record<string, string>;
   /** Localized top-level values, keyed by field then language. */
   values: Record<string, Record<string, string>>;
   itemGroups: Record<string, Array<Record<string, unknown>>>;
+}
+
+interface IncomingContact extends IncomingFields {
+  /** Legacy export contact_id, stored as the `id` attr. */
+  legacyId: string;
   /** All emails found anywhere in the row (matching key). */
   emails: string[];
   nameKey: string;
@@ -50,7 +55,7 @@ export async function importForm(views: Fetcher, jsonOnly = false): Promise<Resp
 
 // ── Preview ────────────────────────────────────────────────────────────────────
 
-export async function previewImport(request: Request, cms: CmsClient, views: Fetcher, jsonOnly = false): Promise<Response> {
+export async function previewImport(request: Request, cms: CmsClient, views: Fetcher, access: ContactsAccess, jsonOnly = false): Promise<Response> {
   const { text, error } = await readUpload(request);
   if (error) return importError(views, error, jsonOnly);
   let incoming: IncomingContact[];
@@ -81,15 +86,17 @@ export async function previewImport(request: Request, cms: CmsClient, views: Fet
     newCount: plan.filter((row) => row.state === 'new').length,
     updateCount: plan.filter((row) => row.state === 'update').length,
     unchangedCount: plan.filter((row) => row.state === 'unchanged').length,
+    modes: importModes(access, 'contacts'),
   }, jsonOnly);
 }
 
 // ── Confirm ────────────────────────────────────────────────────────────────────
 
-export async function confirmImport(request: Request, cms: CmsClient): Promise<Response> {
+export async function confirmImport(request: Request, cms: CmsClient, access: ContactsAccess): Promise<Response> {
   const form = await request.formData();
   const text = String(form.get('raw') ?? '');
   const mode = String(form.get('mode') ?? 'new_and_update');
+  if (!importModeAllowed(access, mode)) return forbidden();
   if (!text.trim()) return redirect(`${ADMIN_BASE}/contacts`);
 
   const incoming = parseUpload(text);
@@ -337,7 +344,7 @@ export function classifyImport(incoming: IncomingContact[], existing: CmsPage[])
     if (!available.length) return { state: 'new' as const, incoming: contact, changes: [] };
     // Prefer a zero-diff match within the group (keeps re-imports idempotent
     // even when several existing contacts share an email or name).
-    const scored = available.map((page) => ({ page, changes: diffContact(contact, page) }));
+    const scored = available.map((page) => ({ page, changes: diffIncoming(contact, page) }));
     const match = scored.find((entry) => entry.changes.length === 0) ?? scored[0];
     consumed.add(match.page.id);
     return {
@@ -350,7 +357,7 @@ export function classifyImport(incoming: IncomingContact[], existing: CmsPage[])
 }
 
 /** Field-level diff shown in the preview; compares the projections the import writes. */
-function diffContact(incoming: IncomingContact, page: CmsPage): Array<{ label: string; from: string; to: string }> {
+export function diffIncoming(incoming: IncomingFields, page: CmsPage): Array<{ label: string; from: string; to: string }> {
   const changes: Array<{ label: string; from: string; to: string }> = [];
   for (const [key, value] of Object.entries(incoming.attrs)) {
     if (key === 'updated_at') continue;
@@ -402,7 +409,7 @@ function summarizeItems(rows: Array<Record<string, unknown>>): string {
 
 // ── Write shapes ───────────────────────────────────────────────────────────────
 
-function toLect(incoming: IncomingContact): Record<string, unknown> {
+export function toLect(incoming: IncomingFields): Record<string, unknown> {
   const lect: Record<string, unknown> = { ...incoming.attrs };
   for (const [field, languages] of Object.entries(incoming.values)) lect[field] = languages;
   for (const [group, groupItems] of Object.entries(incoming.itemGroups)) lect[group] = groupItems;
@@ -431,7 +438,7 @@ async function fetchExistingContacts(cms: CmsClient): Promise<CmsPage[]> {
 
 // ── Small helpers ──────────────────────────────────────────────────────────────
 
-async function readUpload(request: Request): Promise<{ text: string; error?: string }> {
+export async function readUpload(request: Request): Promise<{ text: string; error?: string }> {
   const form = await request.formData();
   // workers-types may type form entries as string; detect an uploaded File shape.
   const file = form.get('file') as unknown as { name?: string; size?: number; text?: () => Promise<string> } | string | null;
@@ -443,7 +450,7 @@ async function readUpload(request: Request): Promise<{ text: string; error?: str
   }
   const pasted = String(form.get('raw') ?? '');
   if (pasted.trim()) return { text: pasted };
-  return { text: '', error: 'Choose a CSV/VCF file or paste its contents.' };
+  return { text: '', error: 'Choose a file or paste its contents.' };
 }
 
 function importError(views: Fetcher, message: string, jsonOnly: boolean): Promise<Response> {
@@ -455,23 +462,23 @@ function importError(views: Fetcher, message: string, jsonOnly: boolean): Promis
   }, jsonOnly);
 }
 
-function en(value: string): Record<string, string> | '' {
+export function en(value: string): Record<string, string> | '' {
   return value ? { en: value } : '';
 }
 
-function isEmptyLocalized(value: unknown): boolean {
+export function isEmptyLocalized(value: unknown): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   return Object.values(value as Record<string, unknown>).every((entry) => entry === '' || entry == null);
 }
 
 /** Strips the legacy Excel `="…"` armor around exported values. */
-function deArmor(value: string): string {
+export function deArmor(value: string): string {
   if (!value.startsWith('=')) return value;
   const inner = value.slice(1);
   return inner.startsWith('"') && inner.endsWith('"') ? inner.slice(1, -1) : inner;
 }
 
-function parseCsv(text: string): string[][] {
+export function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let cell = '';
@@ -501,6 +508,6 @@ function parseCsv(text: string): string[][] {
   return rows;
 }
 
-function redirect(location: string): Response {
+export function redirect(location: string): Response {
   return new Response(null, { status: 303, headers: { Location: location } });
 }

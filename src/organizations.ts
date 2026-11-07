@@ -20,6 +20,7 @@ import {
   pointer,
   type CmsPage,
 } from './cms';
+import type { ContactsAccess } from './permissions';
 import { adminView } from '@lionrockjs/worker-cms-plugin';
 
 const ADMIN_BASE = `/admin/plugins/${PLUGIN_ID}`;
@@ -30,8 +31,9 @@ const WRITE_CHUNK = 100;
  *  subrequest budget: ≤ 5 chunked calls per kind plus the paged reads. */
 const BACKFILL_WRITES_PER_PASS = 300;
 
-export async function organizationsIndex(cms: CmsClient, views: Fetcher, url: URL, jsonOnly = false): Promise<Response> {
+export async function organizationsIndex(cms: CmsClient, views: Fetcher, url: URL, access: ContactsAccess, jsonOnly = false): Promise<Response> {
   const q = (url.searchParams.get('q') ?? '').trim();
+  const flash = (url.searchParams.get('flash') ?? '').trim();
   const offset = Math.max(0, Number.parseInt(url.searchParams.get('offset') ?? '0', 10) || 0);
   const { pages, total } = await cms.list('organization', { q: q || undefined, limit: LIST_LIMIT, offset });
   const rows = pages.map((page) => organizationRow(page));
@@ -44,6 +46,11 @@ export async function organizationsIndex(cms: CmsClient, views: Fetcher, url: UR
 
   return adminView(views, 'Organizations', 'organizations', {
     q,
+    flash,
+    canCreate: access.canCreate,
+    canUpdate: access.canUpdate,
+    canImport: access.canCreate || access.canUpdate,
+    canBackfill: access.canCreate && access.canUpdate,
     rows,
     total,
     count: rows.length,
@@ -55,6 +62,8 @@ export async function organizationsIndex(cms: CmsClient, views: Fetcher, url: UR
     searchAction: `${ADMIN_BASE}/organizations`,
     createHref: '/admin/pages/new?page_type=organization',
     backfillHref: `${ADMIN_BASE}/organizations/backfill`,
+    importHref: `${ADMIN_BASE}/organizations/import`,
+    exportHref: `${ADMIN_BASE}/organizations/export${q ? `?${new URLSearchParams({ q }).toString()}` : ''}`,
   }, jsonOnly);
 }
 
@@ -91,7 +100,7 @@ export interface BackfillPlan {
   contacts: Map<number, CmsPage>;
 }
 
-async function listAll(cms: CmsClient, pageType: string): Promise<CmsPage[]> {
+export async function listAll(cms: CmsClient, pageType: string): Promise<CmsPage[]> {
   const all: CmsPage[] = [];
   for (let offset = 0; ; offset += READ_PAGE) {
     const { pages, total } = await cms.list(pageType, { limit: READ_PAGE, offset });

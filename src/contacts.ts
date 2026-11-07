@@ -10,13 +10,14 @@
 // ============================================================
 
 import { CmsClient, PLUGIN_ID, contactEmails, contactNameKey, contactRow, type CmsPage } from './cms';
+import type { ContactsAccess } from './permissions';
 import { adminView } from '@lionrockjs/worker-cms-plugin';
 
 export const ADMIN_BASE = `/admin/plugins/${PLUGIN_ID}`;
 const LIST_LIMIT = 200;
 const EXPORT_LIMIT = 500;
 
-export async function contactsIndex(cms: CmsClient, views: Fetcher, url: URL, jsonOnly = false, canEdit = false): Promise<Response> {
+export async function contactsIndex(cms: CmsClient, views: Fetcher, url: URL, access: ContactsAccess, jsonOnly = false): Promise<Response> {
   const q = (url.searchParams.get('q') ?? '').trim();
   const flash = (url.searchParams.get('flash') ?? '').trim();
   const offset = Math.max(0, Number.parseInt(url.searchParams.get('offset') ?? '0', 10) || 0);
@@ -34,7 +35,10 @@ export async function contactsIndex(cms: CmsClient, views: Fetcher, url: URL, js
   return adminView(views, 'Contacts', 'contacts', {
     q,
     flash,
-    canEdit,
+    canCreate: access.canCreate,
+    canUpdate: access.canUpdate,
+    canImport: access.canCreate || access.canUpdate,
+    canDelete: access.canDelete,
     rows,
     total,
     count: rows.length,
@@ -236,7 +240,7 @@ function redirect(location: string): Response {
   return new Response(null, { status: 303, headers: { Location: location } });
 }
 
-function csvResponse(body: string, filename: string): Response {
+export function csvResponse(body: string, filename: string): Response {
   return new Response(body, {
     headers: {
       'content-type': 'text/csv; charset=utf-8',
