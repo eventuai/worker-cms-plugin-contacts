@@ -52,22 +52,6 @@ export function contactsAccessForRequest(request: Request): ContactsAccess {
   };
 }
 
-/** Import may write only what the user's access allows; `mode` is the preview's apply choice. */
-export function importModeAllowed(access: ContactsAccess, mode: string): boolean {
-  const creates = mode !== 'update_only';
-  const updates = mode !== 'new_only';
-  return (!creates || access.canCreate) && (!updates || access.canUpdate);
-}
-
-/** Apply-mode options the preview offers, filtered by access. */
-export function importModes(access: ContactsAccess, noun: string): Array<{ value: string; label: string }> {
-  return [
-    { value: 'new_and_update', label: 'New + updates' },
-    { value: 'new_only', label: `New ${noun} only` },
-    { value: 'update_only', label: 'Updates only' },
-  ].filter((option) => importModeAllowed(access, option.value));
-}
-
 export function forbidden(): Response {
   return new Response('forbidden', { status: 403 });
 }

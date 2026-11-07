@@ -4,8 +4,6 @@
     <p class="mt-1 text-sm text-gray-500">{{ total }} contact{% if total != 1 %}s{% endif %}{% if q != blank %} matching “{{ q }}”{% endif %}</p>
   </div>
   <div class="flex flex-wrap gap-2">
-    {% if canImport %}<a class="inline-block px-4 py-2 rounded-lg text-sm font-semibold border border-transparent bg-white text-gray-700 border-gray-300 hover:bg-gray-50" href="{{ importHref }}">Import</a>{% endif %}
-    <a class="inline-block px-4 py-2 rounded-lg text-sm font-semibold border border-transparent bg-white text-gray-700 border-gray-300 hover:bg-gray-50" href="{{ exportHref }}">Export CSV</a>
     {% if canCreate %}<a class="inline-block px-4 py-2 rounded-lg text-sm font-semibold border border-transparent bg-indigo-600 text-white hover:bg-indigo-700" href="{{ createHref }}">New contact</a>{% endif %}
   </div>
 </div>

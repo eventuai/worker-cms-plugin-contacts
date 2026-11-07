@@ -7,15 +7,15 @@
  "permissions": [
   {
    "value": "contacts:read",
-   "label": "Contacts: view and export contacts and organizations"
+   "label": "Contacts: view contacts and organizations"
   },
   {
    "value": "contacts:create",
-   "label": "Contacts: create and import new contacts and organizations"
+   "label": "Contacts: create new contacts and organizations"
   },
   {
    "value": "contacts:update",
-   "label": "Contacts: edit contacts and organizations, including import updates"
+   "label": "Contacts: edit contacts and organizations"
   },
   {
    "value": "contacts:delete",

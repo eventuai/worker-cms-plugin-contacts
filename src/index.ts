@@ -7,32 +7,24 @@
 // so contacts are authored as CMS pages through the CMS editor; this plugin
 // adds the surrounding machinery the generic editor doesn't have:
 //
-//   contacts       — list + search, CSV export (+ sample), CSV/VCF import
-//                    (preview → confirm), duplicate check, typeahead JSON
-//   organizations  — generic company records (list, typeahead, CSV
-//                    export + import, backfill from contact positions)
-//                    other plugins extend
+//   contacts       — list + search, duplicate check, typeahead JSON
+//   organizations  — generic company records (list, typeahead, backfill
+//                    from contact positions) other plugins extend
 //   email-quality  — verification status over every contact's emails
 //   reports        — contact-quality tier analysis
 //
+// CSV import/export is handled by the generic import-export plugin.
+//
 // Ported from the legacy Eventuai app: controller/admin/Contact.mjs,
-// ContactAPI.mjs, EmailQuality.mjs, Report.mjs, helper/Importer.mjs.
+// ContactAPI.mjs, EmailQuality.mjs, Report.mjs.
 // ============================================================
 
 import MANIFEST from './manifest.json';
 import { CmsClient, CmsApiError, CmsNotConfiguredError } from './cms';
-import { ADMIN_BASE, bulkDeleteContacts, checkDuplicate, contactsIndex, exportContacts, exportSample, searchJson } from './contacts';
+import { ADMIN_BASE, bulkDeleteContacts, checkDuplicate, contactsIndex, searchJson } from './contacts';
 import { emailQualityIndex, setEmailStatus, submitToVerifier, type VerifierEnv } from './email-quality';
-import { confirmImport, importForm, previewImport } from './import';
 import { contactQualityReport } from './reports';
 import { backfillPass, backfillPreview, organizationsIndex, organizationsSearchJson } from './organizations';
-import {
-  confirmOrganizationImport,
-  exportOrganizations,
-  exportOrganizationsSample,
-  organizationImportForm,
-  previewOrganizationImport,
-} from './organization-import';
 import { contactsAccessForRequest, forbidden } from './permissions';
 import {
   adminView,
@@ -135,7 +127,6 @@ async function handleAdmin(request: Request, env: PluginEnv, url: URL): Promise<
 
   const access = contactsAccessForRequest(request);
   if (!access.canRead) return forbidden();
-  const canImport = access.canCreate || access.canUpdate;
   const jsonOnly = wantsJson(url);
   const cms = new CmsClient(env);
   const section = segments[0] || 'contacts';
@@ -147,29 +138,13 @@ async function handleAdmin(request: Request, env: PluginEnv, url: URL): Promise<
       if (!access.canDelete) return forbidden();
       return bulkDeleteContacts(request, cms);
     }
-    if (sub === 'export') return exportContacts(cms, url);
-    if (sub === 'export-sample') return exportSample();
     if (sub === 'check-duplicate.json') return checkDuplicate(cms, url);
     if (sub === 'search.json') return searchJson(cms, url);
-    if (sub === 'import') {
-      if (!canImport) return forbidden();
-      if (segments[2] === 'confirm' && request.method === 'POST') return confirmImport(request, cms, access);
-      if (request.method === 'POST') return previewImport(request, cms, env.VIEWS, access, jsonOnly);
-      return importForm(env.VIEWS, jsonOnly);
-    }
   }
 
   if (section === 'organizations') {
     const sub = segments[1] ?? '';
     if (sub === 'search.json') return organizationsSearchJson(cms, url);
-    if (sub === 'export') return exportOrganizations(cms, url);
-    if (sub === 'export-sample') return exportOrganizationsSample();
-    if (sub === 'import') {
-      if (!canImport) return forbidden();
-      if (segments[2] === 'confirm' && request.method === 'POST') return confirmOrganizationImport(request, cms, access);
-      if (request.method === 'POST') return previewOrganizationImport(request, cms, env.VIEWS, access, jsonOnly);
-      return organizationImportForm(env.VIEWS, jsonOnly);
-    }
     if (sub === 'backfill') {
       // Creates organizations and updates contact positions.
       if (!access.canCreate || !access.canUpdate) return forbidden();

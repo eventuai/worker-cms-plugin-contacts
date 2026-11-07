@@ -49,7 +49,6 @@ export async function organizationsIndex(cms: CmsClient, views: Fetcher, url: UR
     flash,
     canCreate: access.canCreate,
     canUpdate: access.canUpdate,
-    canImport: access.canCreate || access.canUpdate,
     canBackfill: access.canCreate && access.canUpdate,
     rows,
     total,
@@ -62,8 +61,6 @@ export async function organizationsIndex(cms: CmsClient, views: Fetcher, url: UR
     searchAction: `${ADMIN_BASE}/organizations`,
     createHref: '/admin/pages/new?page_type=organization',
     backfillHref: `${ADMIN_BASE}/organizations/backfill`,
-    importHref: `${ADMIN_BASE}/organizations/import`,
-    exportHref: `${ADMIN_BASE}/organizations/export${q ? `?${new URLSearchParams({ q }).toString()}` : ''}`,
   }, jsonOnly);
 }
 

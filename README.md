@@ -29,13 +29,12 @@ Part of the RSVP/contact port — see `cms/../cms-to-rsvp.md`. Pairs with
 ## Admin sections
 
 - **Contacts** (`/admin/plugins/contacts/contacts`) — list + search (Plugin API `q`
-  over names/emails/organizations), CSV export of the current search,
-  export-sample, and **CSV/VCF import** with a preview → confirm flow
-  (`src/import.ts`): rows match an existing contact by legacy `contact_id` →
-  any email → full-name key (consumed once, so re-imports are idempotent);
-  creates run in 25-row Plugin API batches, updates per contact. Excel files aren't
-  parsed — convert to CSV first. Taxonomy-tag columns are skipped (Plugin API has no
-  tag-name resolution yet). Authoring stays in the CMS page editor.
+  over names/emails/organizations) and bulk delete. Authoring stays in the CMS
+  page editor.
+- **CSV import/export** of contacts and organizations is not part of this
+  plugin — use the generic import-export plugin (Settings → Import / Export),
+  whose `page_type,slug,name,<lect path>,tag:<taxonomy>` format also covers
+  repeatable items and tags.
 - **JSON endpoints** — `contacts/check-duplicate.json?email=&name=` (legacy
   check_duplicate) and `contacts/search.json?q=` (typeahead; the events
   plugin's add-from-contacts page can call it same-origin via the admin proxy).
@@ -46,17 +45,11 @@ Part of the RSVP/contact port — see `cms/../cms-to-rsvp.md`. Pairs with
   against names and legal names, and links both ways (position pointer +
   `people` row). Bounded passes (≤ 300 page writes), re-run until done;
   re-running is a no-op.
-  **CSV export/import** (`organizations/export`, `export-sample`,
-  `organizations/import`, `src/organization-import.ts`) with the same preview →
-  confirm flow: rows match by `organization_id` (CMS page id) → registration
-  no. → tax ID → name/legal-name key; an export re-imports as all-unchanged.
-  `people` links are not in the CSV and are never changed by an import.
 - **Permissions** — `contacts:read`, `contacts:create`, `contacts:update`,
   `contacts:delete` (grant them to roles in the CMS Roles admin; a non-admin
   also needs the host's `plugin:access`). They cover contacts and
-  organizations; any write permission implies read. Import needs create for
-  new rows and update for changed rows, backfill needs both, bulk delete needs
-  delete, and email-status changes need update. Admins get everything. They
+  organizations; any write permission implies read. Backfill needs create and
+  update, bulk delete needs delete, and email-status changes need update. Admins get everything. They
   gate this plugin's screens only: editing a contact in the CMS page editor is
   governed by the host's own `content:*` permissions.
 - **Email Quality** (`…/email-quality`) — status counts, unverified list,
@@ -95,17 +88,14 @@ single-tenant fallback for local development.
 ## Status
 
 - [x] `contact` blueprint + taxonomies; 3-section admin
-- [x] List + search + CSV export/export-sample
-- [x] CSV/VCF import (preview → confirm, idempotent re-import); XLSX = convert first
+- [x] List + search + bulk delete
 - [x] Duplicate detection + typeahead JSON
 - [x] Email quality (heuristic + external verifier + manual statuses)
 - [x] Contact-quality tier report
 - [x] `organization` type, list/typeahead, backfill from contact positions
-- [ ] Taxonomy-tag import/assignment (needs Plugin API tag-name resolution)
 - [ ] User-usage report (needs host audit access)
 
 ## Source mapping (legacy → here)
 
-`controller/admin/{Contact,ContactAPI,EmailQuality}.mjs`, `helper/Importer.mjs`,
-`helper/{Contact,ExcelParser,VcfParser,JSONSearch,EmailQuality}.mjs`,
-`importer/Contact.mjs`.
+`controller/admin/{Contact,ContactAPI,EmailQuality}.mjs`,
+`helper/{Contact,JSONSearch,EmailQuality}.mjs`.

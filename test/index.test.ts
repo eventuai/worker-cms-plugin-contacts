@@ -167,17 +167,6 @@ describe('contacts admin', () => {
     expect(html).toContain('<tr data-table-filter-empty>');
   });
 
-  it('exports the search results as CSV', async () => {
-    fakeCms([ADA, GRACE]);
-    const response = await plugin.fetch(request('/__plugin/admin/contacts/export'), env());
-    const csv = await response.text();
-
-    expect(response.headers.get('content-type')).toContain('text/csv');
-    expect(csv).toContain('"contact_id"');
-    expect(csv).toContain('"Ada"');
-    expect(csv).toContain('"Grace Hopper"');
-  });
-
   it('detects duplicates by email and by name', async () => {
     fakeCms([ADA, GRACE]);
     const byEmail = await plugin.fetch(request('/__plugin/admin/contacts/check-duplicate.json?email=ada@example.com'), env());
@@ -361,90 +350,6 @@ describe('organizations', () => {
   });
 });
 
-describe('contact import', () => {
-  const CSV = [
-    'contact_id,first_name,last_name,full_name,chinese_name_tc,company_1,title_1,email_work_1,mobile_1,email_personal_1,remarks_contact',
-    'C-1001,Ada,Lovelace,Ada Lovelace,愛達,Analytical Engines,Director,ada@example.com,+852 9876 5432,ada@personal.example,VIP',
-    'C-2002,Alan,Turing,Alan Turing,,Bletchley,Cryptanalyst,alan@example.com,,,',
-  ].join('\n');
-
-  function importRequest(path: string, fields: Record<string, string>): Request {
-    const body = new URLSearchParams(fields);
-    return request(path, {
-      method: 'POST',
-      headers: { 'x-plugin-secret': 'shared-secret', 'content-type': 'application/x-www-form-urlencoded' },
-      body,
-    });
-  }
-
-  it('previews new vs update vs unchanged without writing', async () => {
-    const { puts, batches } = fakeCms([ADA]);
-    const response = await plugin.fetch(importRequest('/__plugin/admin/contacts/import', { raw: CSV }), env());
-    const html = await renderedText(response);
-
-    expect(html).toContain('1 new · 1 updated · 0 unchanged');
-    expect(html).toContain('Alan Turing');
-    // Ada exists but the CSV adds remarks + zh-hant full name → update with changes listed
-    expect(html).toContain('remarks');
-    expect(puts).toHaveLength(0);
-    expect(batches).toHaveLength(0);
-  });
-
-  it('confirm applies creates in chunks and updates per contact', async () => {
-    const { puts, batches } = fakeCms([ADA]);
-    const response = await plugin.fetch(importRequest('/__plugin/admin/contacts/import/confirm', { raw: CSV, mode: 'new_and_update' }), env());
-
-    expect(response.status).toBe(303);
-    expect(batches).toHaveLength(1);
-    const created = (batches[0].pages as Array<Record<string, unknown>>)[0];
-    expect(created).toMatchObject({ page_type: 'contact', name: 'Alan Turing' });
-    expect(puts).toHaveLength(1);
-    expect(puts[0].id).toBe(11);
-    const lect = puts[0].body.lect as Record<string, unknown>;
-    expect(lect.remarks).toBe('VIP');
-    expect((lect.full_name as Record<string, string>)['zh-hant']).toBe('愛達');
-  });
-
-  it('re-importing the applied file is idempotent (all unchanged)', async () => {
-    // Ada as she would look AFTER the import applied.
-    const adaAfter = contact(11, 'Ada Lovelace', {
-      ...ADA.lect,
-      id: 'C-1001',
-      remarks: 'VIP',
-      full_name: { en: 'Ada Lovelace', 'zh-hant': '愛達' },
-      position: [{
-        organization_name: { en: 'Analytical Engines' }, title: { en: 'Director' },
-        email: 'ada@example.com', direct_phone: '', general_phone: '', fax: '', general_email: '', website: '',
-      }],
-    });
-    const alanAfter = contact(12, 'Alan Turing', {
-      id: 'C-2002',
-      first_name: { en: 'Alan' },
-      last_name: { en: 'Turing' },
-      full_name: { en: 'Alan Turing' },
-      position: [{ organization_name: { en: 'Bletchley' }, title: { en: 'Cryptanalyst' }, email: 'alan@example.com' }],
-    });
-    fakeCms([adaAfter, alanAfter]);
-    const response = await plugin.fetch(importRequest('/__plugin/admin/contacts/import', { raw: CSV }), env());
-    const html = await renderedText(response);
-    expect(html).toContain('0 new');
-    expect(html).toContain('2 unchanged');
-  });
-
-  it('imports VCF cards', async () => {
-    const vcf = [
-      'BEGIN:VCARD', 'VERSION:3.0', 'N:Curie;Marie;;;', 'FN:Marie Curie',
-      'EMAIL:marie@example.com', 'TEL:+33 1 23 45', 'ORG:Sorbonne', 'TITLE:Professor', 'END:VCARD',
-    ].join('\r\n');
-    fakeCms([]);
-    const response = await plugin.fetch(importRequest('/__plugin/admin/contacts/import', { raw: vcf }), env());
-    const html = await renderedText(response);
-    expect(html).toContain('Marie Curie');
-    expect(html).toContain('marie@example.com');
-    expect(html).toContain('1 new');
-  });
-});
-
 describe('email quality', () => {
   it('summarizes statuses and lists unverified contacts', async () => {
     fakeCms([
@@ -519,103 +424,6 @@ describe('reports', () => {
   });
 });
 
-describe('organization import/export', () => {
-  function organization(id: number, name: string, lect: Record<string, unknown> = {}): FakePage {
-    return { id, page_type: 'organization', name, lect: { name: { en: name }, ...lect } };
-  }
-
-  const AE = organization(31, 'Analytical Engines', {
-    legal_name: 'Analytical Engines Ltd',
-    registration_no: '12345678',
-    website: 'https://ae.example',
-    address: [{ type: 'office', address: { en: '1 Example Road' } }],
-    people: [{ _pointers: { contact: '11' } }],
-  });
-
-  function form(path: string, fields: Record<string, string>, user?: Record<string, unknown>): Request {
-    const headers: Record<string, string> = { 'x-plugin-secret': 'shared-secret', 'content-type': 'application/x-www-form-urlencoded' };
-    if (user) headers['x-cms-user'] = JSON.stringify(user);
-    return request(path, { method: 'POST', headers, body: new URLSearchParams(fields) });
-  }
-
-  it('exports organizations as CSV', async () => {
-    fakeCms([structuredClone(AE), organization(32, 'Navy')]);
-    const response = await plugin.fetch(request('/__plugin/admin/organizations/export'), env());
-    expect(response.headers.get('content-type')).toContain('text/csv');
-    const lines = (await response.text()).split('\n');
-    expect(lines[0]).toContain('"organization_id","name","name_zh_hant"');
-    expect(lines[1]).toContain('"31","Analytical Engines"');
-    expect(lines[1]).toContain('"Analytical Engines Ltd","12345678"');
-    expect(lines[1]).toContain('"office","1 Example Road"');
-    expect(lines).toHaveLength(3);
-  });
-
-  it('serves a sample CSV that previews as one new organization', async () => {
-    fakeCms([]);
-    const sample = await (await plugin.fetch(request('/__plugin/admin/organizations/export-sample'), env())).text();
-    const html = await renderedText(await plugin.fetch(form('/__plugin/admin/organizations/import', { raw: sample }), env()));
-    expect(html).toContain('1 new · 0 updated · 0 unchanged');
-    expect(html).toContain('Analytical Engines');
-  });
-
-  it('re-importing an export is all unchanged', async () => {
-    fakeCms([structuredClone(AE), organization(32, 'Navy')]);
-    const csv = await (await plugin.fetch(request('/__plugin/admin/organizations/export'), env())).text();
-    const html = await renderedText(await plugin.fetch(form('/__plugin/admin/organizations/import', { raw: csv }), env()));
-    expect(html).toContain('0 new · 0 updated · 2 unchanged');
-  });
-
-  it('previews new vs update without writing, matching by registration no. and name', async () => {
-    const { batches, patches } = fakeCms([structuredClone(AE), organization(32, 'Navy')]);
-    const csv = [
-      'name,legal_name,registration_no,website',
-      'AE Renamed,,12345678,https://new.example',
-      'NAVY,,,https://navy.example',
-      'Bletchley Park,,,',
-    ].join('\n');
-    const html = await renderedText(await plugin.fetch(form('/__plugin/admin/organizations/import', { raw: csv }), env()));
-    expect(html).toContain('1 new · 2 updated · 0 unchanged');
-    expect(html).toContain('https://new.example');
-    expect(batches).toHaveLength(0);
-    expect(patches).toHaveLength(0);
-  });
-
-  it('confirm creates new organizations and batch-updates matches without touching people', async () => {
-    const pages = [structuredClone(AE)];
-    const { batches, patches } = fakeCms(pages);
-    const csv = ['organization_id,name,website', '31,Analytical Engines,https://new.example', ',Bletchley Park,'].join('\n');
-    const response = await plugin.fetch(form('/__plugin/admin/organizations/import/confirm', { raw: csv, mode: 'new_and_update' }), env());
-
-    expect(response.status).toBe(303);
-    expect(response.headers.get('Location')).toContain('/admin/plugins/contacts/organizations?flash=');
-    expect(batches).toHaveLength(1);
-    expect(batches[0].pages).toEqual([{ page_type: 'organization', name: 'Bletchley Park', lect: { name: { en: 'Bletchley Park' } } }]);
-    expect(patches).toEqual([[{ id: 31, lect: { website: 'https://new.example', name: { en: 'Analytical Engines' } } }]]);
-    expect(pages[0].lect.people).toEqual([{ _pointers: { contact: '11' } }]);
-  });
-
-  it('honours the new-only and update-only modes', async () => {
-    const csv = ['organization_id,name,website', '31,Analytical Engines,https://new.example', ',Bletchley Park,'].join('\n');
-    let cms = fakeCms([structuredClone(AE)]);
-    await plugin.fetch(form('/__plugin/admin/organizations/import/confirm', { raw: csv, mode: 'new_only' }), env());
-    expect(cms.batches).toHaveLength(1);
-    expect(cms.patches).toHaveLength(0);
-
-    vi.unstubAllGlobals();
-    cms = fakeCms([structuredClone(AE)]);
-    await plugin.fetch(form('/__plugin/admin/organizations/import/confirm', { raw: csv, mode: 'update_only' }), env());
-    expect(cms.batches).toHaveLength(0);
-    expect(cms.patches).toHaveLength(1);
-  });
-
-  it('shows import and export on the organizations list', async () => {
-    fakeCms([structuredClone(AE)]);
-    const html = await renderedText(await plugin.fetch(request('/__plugin/admin/organizations?q=engines'), env()));
-    expect(html).toContain('href="/admin/plugins/contacts/organizations/import"');
-    expect(html).toContain('href="/admin/plugins/contacts/organizations/export?q=engines"');
-  });
-});
-
 describe('contact CRUD permissions', () => {
   const as = (permissions: string[], role = 'staff') => JSON.stringify({ id: 'u1', role, permissions });
 
@@ -638,27 +446,18 @@ describe('contact CRUD permissions', () => {
     ]);
   });
 
-  it('read-only users see lists and exports but no create/import/edit/delete controls', async () => {
+  it('read-only users see lists but no create/edit/delete controls', async () => {
     fakeCms([ADA, { id: 31, page_type: 'organization', name: 'AE', lect: { name: { en: 'AE' } } }]);
     const user = as(['contacts:read']);
     const contactsHtml = await renderedText(await plugin.fetch(get('/__plugin/admin/contacts', user), env()));
     expect(contactsHtml).toContain('Ada Lovelace');
-    expect(contactsHtml).toContain('Export CSV');
     expect(contactsHtml).not.toContain('New contact');
-    expect(contactsHtml).not.toContain('>Import<');
     expect(contactsHtml).not.toContain('>Edit<');
     expect(contactsHtml).not.toContain('contacts-bulk-form');
 
     const orgHtml = await renderedText(await plugin.fetch(get('/__plugin/admin/organizations', user), env()));
-    expect(orgHtml).toContain('Export CSV');
     expect(orgHtml).not.toContain('New organization');
-    expect(orgHtml).not.toContain('>Import<');
     expect(orgHtml).not.toContain('Create from contacts');
-
-    expect((await plugin.fetch(get('/__plugin/admin/contacts/export', user), env())).status).toBe(200);
-    expect((await plugin.fetch(get('/__plugin/admin/organizations/export', user), env())).status).toBe(200);
-    expect((await plugin.fetch(get('/__plugin/admin/contacts/import', user), env())).status).toBe(403);
-    expect((await plugin.fetch(get('/__plugin/admin/organizations/import', user), env())).status).toBe(403);
   });
 
   it('a write permission implies read', async () => {
@@ -674,34 +473,6 @@ describe('contact CRUD permissions', () => {
     const allowed = await plugin.fetch(post('/__plugin/admin/contacts/bulk-delete', as(['contacts:delete']), [['ids', '11']]), env());
     expect(allowed.status).toBe(303);
     expect(deletes).toEqual([[11]]);
-  });
-
-  it('create-only users may import new rows but not apply updates', async () => {
-    const csv = 'contact_id,full_name\nC-1001,Ada Lovelace\nC-3003,Alan Turing';
-    const { batches, puts } = fakeCms([ADA]);
-    const user = as(['contacts:create']);
-
-    const preview = await plugin.fetch(post('/__plugin/admin/contacts/import?json=1', user, { raw: csv }), env());
-    const { data } = await preview.json() as { data: { modes: Array<{ value: string }> } };
-    expect(data.modes.map((mode) => mode.value)).toEqual(['new_only']);
-
-    const denied = await plugin.fetch(post('/__plugin/admin/contacts/import/confirm', user, { raw: csv, mode: 'new_and_update' }), env());
-    expect(denied.status).toBe(403);
-    expect(batches).toHaveLength(0);
-
-    const allowed = await plugin.fetch(post('/__plugin/admin/contacts/import/confirm', user, { raw: csv, mode: 'new_only' }), env());
-    expect(allowed.status).toBe(303);
-    expect(batches).toHaveLength(1);
-    expect(puts).toHaveLength(0);
-  });
-
-  it('update-only users may not create organizations through import', async () => {
-    const { batches } = fakeCms([]);
-    const response = await plugin.fetch(post('/__plugin/admin/organizations/import/confirm', as(['contacts:update']), {
-      raw: 'name\nBletchley Park', mode: 'new_only',
-    }), env());
-    expect(response.status).toBe(403);
-    expect(batches).toHaveLength(0);
   });
 
   it('the email-quality status change needs contacts:update', async () => {

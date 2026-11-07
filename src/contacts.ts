@@ -1,10 +1,11 @@
 // ============================================================
-// Contacts admin: list + search, CSV export (+ sample), duplicate check and
+// Contacts admin: list + search, bulk delete, duplicate check and
 // the typeahead JSON other plugin admins consume (the legacy HX equivalent).
 // Authoring stays in the CMS page editor — rows link there.
 //
-// Ported from the legacy controller/admin/Contact.mjs list/search/export
-// surface. Search rides the Plugin API `q` (name/slug/lect LIKE per term), so it
+// Ported from the legacy controller/admin/Contact.mjs list/search surface.
+// CSV import/export is handled by the generic import-export plugin. Search
+// rides the Plugin API `q` (name/slug/lect LIKE per term), so it
 // covers names, emails, organizations and phone digits without a bespoke
 // index.
 // ============================================================
@@ -15,7 +16,6 @@ import { adminView } from '@lionrockjs/worker-cms-plugin';
 
 export const ADMIN_BASE = `/admin/plugins/${PLUGIN_ID}`;
 const LIST_LIMIT = 200;
-const EXPORT_LIMIT = 500;
 
 export async function contactsIndex(cms: CmsClient, views: Fetcher, url: URL, access: ContactsAccess, jsonOnly = false): Promise<Response> {
   const q = (url.searchParams.get('q') ?? '').trim();
@@ -37,7 +37,6 @@ export async function contactsIndex(cms: CmsClient, views: Fetcher, url: URL, ac
     flash,
     canCreate: access.canCreate,
     canUpdate: access.canUpdate,
-    canImport: access.canCreate || access.canUpdate,
     canDelete: access.canDelete,
     rows,
     total,
@@ -50,9 +49,6 @@ export async function contactsIndex(cms: CmsClient, views: Fetcher, url: URL, ac
     searchAction: `${ADMIN_BASE}/contacts`,
     bulkDeleteAction: `${ADMIN_BASE}/contacts/bulk-delete`,
     createHref: `/admin/pages/new?page_type=contact`,
-    exportHref: `${ADMIN_BASE}/contacts/export${params({})}`,
-    exportSampleHref: `${ADMIN_BASE}/contacts/export-sample`,
-    importHref: `${ADMIN_BASE}/contacts/import`,
   }, jsonOnly);
 }
 
@@ -77,107 +73,6 @@ export async function bulkDeleteContacts(request: Request, cms: CmsClient): Prom
   if (!ids.length) return back('No contacts selected');
   await cms.batchRemove(ids);
   return back(`Deleted ${ids.length} contact${ids.length === 1 ? '' : 's'}`);
-}
-
-// ── Export ─────────────────────────────────────────────────────────────────────
-
-/** Columns match the legacy contact export where practical (see import map). */
-const EXPORT_COLUMNS = [
-  'contact_id', 'source', 'prefix', 'suffix', 'gender', 'countryregion', 'nationality',
-  'first_name', 'last_name', 'full_name', 'chinese_name_tc', 'chinese_name_sc',
-  'company_1', 'title_1', 'department_1', 'email_work_1', 'work_phone_1_direct',
-  'mobile_1', 'email_personal_1', 'home_address_1', 'remarks_contact', 'email_status',
-];
-
-export async function exportContacts(cms: CmsClient, url: URL): Promise<Response> {
-  const q = (url.searchParams.get('q') ?? '').trim();
-  const lines: string[] = [EXPORT_COLUMNS.map(csvValue).join(',')];
-  // Bounded pagination keeps each Plugin API call light; EXPORT_LIMIT rows per call.
-  for (let offset = 0; ; offset += EXPORT_LIMIT) {
-    const { pages, total } = await cms.list('contact', { q: q || undefined, limit: EXPORT_LIMIT, offset });
-    for (const page of pages) lines.push(exportRow(page).map(csvValue).join(','));
-    if (offset + pages.length >= total || pages.length === 0) break;
-  }
-  return csvResponse(lines.join('\n'), q ? `contacts-search-${Date.now()}.csv` : `contacts-export-${Date.now()}.csv`);
-}
-
-export function exportSample(): Response {
-  const sample = [
-    EXPORT_COLUMNS.map(csvValue).join(','),
-    EXPORT_COLUMNS.map((column) => csvValue(sampleValue(column))).join(','),
-  ].join('\n');
-  return csvResponse(sample, 'contacts-sample.csv');
-}
-
-function exportRow(page: CmsPage): string[] {
-  const lect = page.lect;
-  const row = contactRow(page);
-  const attrOf = (key: string): string => String((lect[key] as string | number | undefined) ?? '');
-  const loc = (key: string, lang = 'en'): string => {
-    const value = lect[key];
-    if (value && typeof value === 'object' && !Array.isArray(value)) return String((value as Record<string, unknown>)[lang] ?? '');
-    return typeof value === 'string' ? value : '';
-  };
-  const firstPosition = (Array.isArray(lect.position) ? lect.position[0] as Record<string, unknown> : undefined) ?? {};
-  const posLoc = (key: string): string => {
-    const value = firstPosition[key];
-    if (value && typeof value === 'object' && !Array.isArray(value)) return String((value as Record<string, unknown>).en ?? '');
-    return typeof value === 'string' ? value : '';
-  };
-  const firstHome = (Array.isArray(lect.home) ? lect.home[0] as Record<string, unknown> : undefined) ?? {};
-  const mobile = (Array.isArray(lect.phone) ? lect.phone as Array<Record<string, unknown>> : [])
-    .find((entry) => String(entry.type ?? '').toLowerCase() !== 'home');
-  const personalEmail = (Array.isArray(lect.email) ? lect.email[0] as Record<string, unknown> : undefined) ?? {};
-  return [
-    attrOf('id') || String(page.id),
-    attrOf('source'),
-    attrOf('prefix'),
-    attrOf('suffix'),
-    attrOf('gender'),
-    attrOf('region'),
-    attrOf('nationality'),
-    loc('first_name'),
-    loc('last_name'),
-    loc('full_name'),
-    loc('full_name', 'zh-hant'),
-    loc('full_name', 'zh-hans'),
-    row.organization,
-    row.title,
-    posLoc('department'),
-    String(firstPosition.email ?? ''),
-    String(firstPosition.direct_phone ?? ''),
-    String(mobile?.phone ?? ''),
-    String(personalEmail.email ?? ''),
-    (() => {
-      const value = firstHome.address;
-      if (value && typeof value === 'object' && !Array.isArray(value)) return String((value as Record<string, unknown>).en ?? '');
-      return typeof value === 'string' ? value : '';
-    })(),
-    attrOf('remarks'),
-    attrOf('email_status'),
-  ];
-}
-
-function sampleValue(column: string): string {
-  const samples: Record<string, string> = {
-    contact_id: 'C-1001',
-    source: 'website',
-    prefix: 'Ms.',
-    gender: 'F',
-    countryregion: 'Hong Kong',
-    first_name: 'Ada',
-    last_name: 'Lovelace',
-    full_name: 'Ada Lovelace',
-    chinese_name_tc: '愛達',
-    company_1: 'Analytical Engines Ltd',
-    title_1: 'Director',
-    email_work_1: 'ada@example.com',
-    work_phone_1_direct: '+852 1234 5678',
-    mobile_1: '+852 9876 5432',
-    email_personal_1: 'ada@personal.example',
-    remarks_contact: 'VIP',
-  };
-  return samples[column] ?? '';
 }
 
 // ── Duplicate check ────────────────────────────────────────────────────────────
@@ -232,19 +127,6 @@ export async function searchJson(cms: CmsClient, url: URL): Promise<Response> {
 
 // ── Shared ─────────────────────────────────────────────────────────────────────
 
-export function csvValue(value: string): string {
-  return `"${value.replaceAll('"', '""')}"`;
-}
-
 function redirect(location: string): Response {
   return new Response(null, { status: 303, headers: { Location: location } });
-}
-
-export function csvResponse(body: string, filename: string): Response {
-  return new Response(body, {
-    headers: {
-      'content-type': 'text/csv; charset=utf-8',
-      'content-disposition': `attachment; filename="${filename}"`,
-    },
-  });
 }
