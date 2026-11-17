@@ -1,101 +1,21 @@
-# worker-cms-plugin-contacts (Contacts Suite)
 
-A [Worker CMS](https://github.com/zeroxcms) plugin covering the **contact side**
-of the system in one Worker — **contacts / CRM + email quality** — to stay within
-the Cloudflare **Free plan** (50 subrequests/request, 100k requests/day).
+## Primary email for eDM
 
-Part of the RSVP/contact port — see `cms/../cms-to-rsvp.md`. Pairs with
-`cms-plugin-events` (the other suite). Replaces the former standalone
-`cms-plugin-email-quality` repo.
+Each contact row shows its effective eDM email and badge. Users with
+`contacts:update` can use the **Primary email for eDM** selector and Save button
+in that row. Choices include personal, work, general work and assistant email;
+spouse addresses are excluded. **Automatic** clears the preference. Removed or
+stale selections fall back to the first eligible address in that order. The
+same preference is used by contact rows/typeahead, verifier submission and the
+events plugin's contact-to-guest copy/refresh.
 
-## Registers (manifest id `contacts`)
+The preference is `lect.primary_email`, declared in the contact blueprint. It
+is changed with a partial CMS update, preserving other contact fields. Existing
+guest snapshots are refreshed explicitly in events. Refresh both plugin
+manifests after deployment to expose the new fields; no new JS approval is needed.
 
-- **Blueprint:** `contact` — multilingual names, 5 work positions, multiple
-  emails/phones, 5 assistants, 8 social platforms, spouse, addresses,
-  `event_history`. Each `position` may point (`*organization`) at its
-  organization.
-- **Blueprint:** `organization` — the generic company record: legal name,
-  registration/tax ids, website, general email/phone, addresses, and `people`
-  (`*contact` + role). Other plugins extend it with their own side-car types
-  instead of adding fields here (procurement's `supplier_profile` points at it).
-- **Taxonomies:** Contact Type, Industry, Interest, Food Allergies, Email
-  Status, Phone Status, Event, Department, Role; Organization Type, Industry for
-  organizations. Department and Role tag who a contact is for filtering (e.g.
-  the e-form department heads); which company, department and title go
-  together stays in each position's text, which search matches.
-- **Nav (4 items):** Contacts, Organizations, Email Quality, Contact Reports —
-  sections of the same plugin admin.
+## Legacy duplicate checks and search navigation
 
-## Admin sections
+`check-duplicate.json?email=&name=` pages through the complete CMS search candidate set rather than stopping after 50 candidates, then checks exact normalized email/name values. The inventory includes personal, work, general, assistant and spouse addresses; shared addresses can identify multiple contacts. eDM recipient selection and assistant-only CC remain separate from this inventory.
 
-- **Contacts** (`/admin/plugins/contacts/contacts`) — list + search (Plugin API `q`
-  over names/emails/organizations) and bulk delete. Authoring stays in the CMS
-  page editor.
-- **CSV import/export** of contacts and organizations is not part of this
-  plugin — use the generic import-export plugin (Settings → Import / Export),
-  whose `page_type,slug,name,<lect path>,tag:<taxonomy>` format also covers
-  repeatable items and tags.
-- **JSON endpoints** — `contacts/check-duplicate.json?email=&name=` (legacy
-  check_duplicate) and `contacts/search.json?q=` (typeahead; the events
-  plugin's add-from-contacts page can call it same-origin via the admin proxy).
-- **Organizations** (`…/organizations`) — list + search,
-  `organizations/search.json?q=` typeahead, and **Create from contacts**
-  (`organizations/backfill`): turns position `organization_name` text into
-  organization pages, matched by a case/punctuation-insensitive name key
-  against names and legal names, and links both ways (position pointer +
-  `people` row). Bounded passes (≤ 300 page writes), re-run until done;
-  re-running is a no-op.
-- **Permissions** — `contacts:read`, `contacts:create`, `contacts:update`,
-  `contacts:delete` (grant them to roles in the CMS Roles admin; a non-admin
-  also needs the host's `plugin:access`). They cover contacts and
-  organizations; any write permission implies read. Backfill needs create and
-  update, bulk delete needs delete, and email-status changes need update. Admins get everything. They
-  gate this plugin's screens only: editing a contact in the CMS page editor is
-  governed by the host's own `content:*` permissions.
-- **Email Quality** (`…/email-quality`) — status counts, unverified list,
-  per-email search, manual status set, and a batch **submit-to-verifier**
-  (generic `POST {emails:[…]}` with a bearer key). Status lives on the contact
-  page as the `email_status` attr; a syntax heuristic (same split the events
-  plugin's auto-send uses) is shown as a hint.
-- **Contact Reports** (`…/reports`) — the legacy contact-quality tier analysis
-  (direct phone/email/social → tiers 1–3, company-level only → 4, unreachable
-  → 5). The legacy *user-usage* report is not ported: it reads the CMS audit
-  tables, which the plugin API doesn't expose.
-
-## Develop
-
-```bash
-npm install
-npm run dev          # wrangler dev
-npm run typecheck
-npm test
-npm run deploy
-```
-
-## Register into the CMS (HTTPS URL transport — no service binding)
-
-1. `wrangler deploy` this Worker, then `wrangler secret put PLUGIN_SECRET`.
-   (For email verification also: `wrangler secret put VERIFIER_API_KEY` and set
-   `VERIFIER_API_URL` in `wrangler.toml`.)
-2. In the CMS: **Admin → Plugins → Register plugin**, paste this Worker's base URL
-   and configure this plugin's dedicated shared secret (requires `plugin:manage`).
-
-No `wrangler.toml` change or CMS redeploy is needed. The manifest is
-`trusted-ui` + `autoTenant`; Connect calls the Worker's enrollment endpoint and
-stores the per-CMS record in `TENANTS` KV. `CMS_URL` + `PLUGIN_SECRET` remain a
-single-tenant fallback for local development.
-
-## Status
-
-- [x] `contact` blueprint + taxonomies; 3-section admin
-- [x] List + search + bulk delete
-- [x] Duplicate detection + typeahead JSON
-- [x] Email quality (heuristic + external verifier + manual statuses)
-- [x] Contact-quality tier report
-- [x] `organization` type, list/typeahead, backfill from contact positions
-- [ ] User-usage report (needs host audit access)
-
-## Source mapping (legacy → here)
-
-`controller/admin/{Contact,ContactAPI,EmailQuality}.mjs`,
-`helper/{Contact,JSONSearch,EmailQuality}.mjs`.
+Contacts links to the host's contact-scoped advanced search, preserving the current search term. The host controls search permissions and feature availability and shows CSV export when the import-export plugin is enabled; the contacts plugin does not duplicate those engines.

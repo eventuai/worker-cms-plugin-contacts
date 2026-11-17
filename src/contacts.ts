@@ -1,3 +1,5 @@
+import { duplicateContacts } from './contact-duplicates';
+import { contactEmailOptions } from './contact-email';
 // ============================================================
 // Contacts admin: list + search, bulk delete, duplicate check and
 // the typeahead JSON other plugin admins consume (the legacy HX equivalent).
@@ -10,9 +12,9 @@
 // index.
 // ============================================================
 
-import { CmsClient, PLUGIN_ID, contactEmails, contactNameKey, contactRow, type CmsPage } from './cms';
+import { CmsClient, PLUGIN_ID, contactRow } from './cms';
 import type { ContactsAccess } from './permissions';
-import { adminView } from '@lionrockjs/worker-cms-plugin';
+import { adminView, parseCmsUser } from '@lionrockjs/worker-cms-plugin';
 
 export const ADMIN_BASE = `/admin/plugins/${PLUGIN_ID}`;
 const LIST_LIMIT = 200;
@@ -49,6 +51,7 @@ export async function contactsIndex(cms: CmsClient, views: Fetcher, url: URL, ac
     searchAction: `${ADMIN_BASE}/contacts`,
     bulkDeleteAction: `${ADMIN_BASE}/contacts/bulk-delete`,
     createHref: `/admin/pages/new?page_type=contact`,
+    advancedSearchHref: `/admin/advanced-search/contact${q ? `?${new URLSearchParams({ search1: q })}` : ''}`,
   }, jsonOnly);
 }
 
@@ -86,21 +89,9 @@ export async function checkDuplicate(cms: CmsClient, url: URL): Promise<Response
   const name = (url.searchParams.get('name') ?? '').trim().toLowerCase();
   if (!email && !name) return Response.json({ duplicates: [] });
 
-  const matches = new Map<number, CmsPage>();
-  if (email) {
-    const { pages } = await cms.list('contact', { q: email, limit: 50 });
-    for (const page of pages) {
-      if (contactEmails(page.lect).includes(email)) matches.set(page.id, page);
-    }
-  }
-  if (name) {
-    const { pages } = await cms.list('contact', { q: name, limit: 50 });
-    for (const page of pages) {
-      if (contactNameKey(page) === name) matches.set(page.id, page);
-    }
-  }
+  const matches = await duplicateContacts(cms, email, name);
   return Response.json({
-    duplicates: [...matches.values()].map((page) => {
+    duplicates: matches.map((page) => {
       const row = contactRow(page);
       return { id: row.id, name: row.name, email: row.email, organization: row.organization };
     }),
@@ -129,4 +120,19 @@ export async function searchJson(cms: CmsClient, url: URL): Promise<Response> {
 
 function redirect(location: string): Response {
   return new Response(null, { status: 303, headers: { Location: location } });
+}
+
+/** Change just the preferred eDM address; reject values no longer on this contact. */
+export async function setPrimaryEmail(request: Request, cms: CmsClient, id: number): Promise<Response> {
+  const form = await request.formData();
+  const page = await cms.get(id);
+  if (page.page_type !== 'contact') return new Response('not found', { status: 404 });
+  const selected = String(form.get('primary_email') ?? '').trim();
+  const option = contactEmailOptions(page.lect).find(option => option.email.toLowerCase() === selected.toLowerCase());
+  if (selected && !option) return new Response('Select an email currently belonging to this contact.', { status: 400 });
+  await cms.request('PUT', `/pages/${id}`, { body: { lect: { primary_email: option?.email ?? '' } }, actingUserId: parseCmsUser(request.headers.get('x-cms-user')).id });
+  const params = new URLSearchParams({ flash: 'Primary eDM email updated' });
+  const q = String(form.get('q') ?? '').trim();
+  if (q) params.set('q', q);
+  return redirect(`${ADMIN_BASE}/contacts?${params}`);
 }

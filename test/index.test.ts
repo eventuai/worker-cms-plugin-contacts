@@ -488,3 +488,44 @@ describe('contact CRUD permissions', () => {
     expect(html).toContain('contacts-bulk-form');
   });
 });
+
+describe('primary eDM email preference', () => {
+  const person = () => contact(21, 'Pat & Co', {
+    primary_email: 'WORK@example.com',
+    email: [{ email: 'personal@example.com' }],
+    position: [{ email: 'work@example.com', general_email: 'office@example.com' }],
+    assistant: [{ email: 'pa@example.com' }], spouse: [{ email: 'spouse@example.com' }],
+    bio: { en: 'Keep this' },
+  });
+  it('renders eligible choices, the selected address, and a read-only effective-email badge', async () => {
+    fakeCms([person()]);
+    const response = await plugin.fetch(request('/__plugin/admin/contacts'), env());
+    const html = await renderedText(response);
+    expect(html).toContain('Primary email for eDM');
+    expect(html).toContain('<option value="work@example.com" selected>');
+    expect(html).toContain('value="pa@example.com"');
+    expect(html).not.toContain('spouse@example.com');
+    expect(html).toContain('>eDM</span>');
+    const readOnly = await plugin.fetch(request('/__plugin/admin/contacts', { headers: { 'x-cms-user': JSON.stringify({ role: 'viewer', permissions: ['contacts:read'] }) } }), env());
+    const readHtml = await renderedText(readOnly);
+    expect(readHtml).toContain('work@example.com');
+    expect(readHtml).not.toContain('name="primary_email"');
+  });
+  it('saves a case-insensitive eligible selection as a partial update, and can clear it', async () => {
+    const { puts } = fakeCms([person()]);
+    for (const value of ['PA@EXAMPLE.COM', '']) {
+      const result = await plugin.fetch(request('/__plugin/admin/contacts/21/primary-email', { method: 'POST', body: new URLSearchParams({ primary_email: value, q: 'Pat' }) }), env());
+      expect(result.status).toBe(303);
+      expect(result.headers.get('location')).toContain('q=Pat');
+    }
+    expect(puts.map(put => put.body)).toEqual([{ lect: { primary_email: 'pa@example.com' } }, { lect: { primary_email: '' } }]);
+  });
+  it('rejects foreign addresses and viewers without update permission', async () => {
+    const { puts } = fakeCms([person()]);
+    const invalid = await plugin.fetch(request('/__plugin/admin/contacts/21/primary-email', { method: 'POST', body: new URLSearchParams({ primary_email: 'spouse@example.com' }) }), env());
+    expect(invalid.status).toBe(400);
+    const denied = await plugin.fetch(request('/__plugin/admin/contacts/21/primary-email', { method: 'POST', headers: { 'x-cms-user': JSON.stringify({ role: 'viewer', permissions: ['contacts:read'] }) }, body: new URLSearchParams({ primary_email: '' }) }), env());
+    expect(denied.status).toBe(403);
+    expect(puts).toHaveLength(0);
+  });
+});

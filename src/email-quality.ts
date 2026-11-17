@@ -1,3 +1,4 @@
+import { primaryEdmEmail } from './contact-email';
 // ============================================================
 // Email Quality — ported from the legacy controller/admin/EmailQuality.mjs:
 // search an email's verification status, list contacts whose emails are
@@ -54,7 +55,7 @@ export async function emailQualityIndex(
       emails: emails.join(', '),
       status,
       hasStatus: status !== '',
-      heuristic: emailHeuristic(emails[0]),
+      heuristic: emailHeuristic(primaryEdmEmail(page.lect)),
       editHref: row.editHref,
       statusAction: `${ADMIN_BASE}/email-quality/status`,
       statuses: STATUSES.map((value) => ({ value, selected: value === status })),
@@ -110,7 +111,7 @@ export async function submitToVerifier(cms: CmsClient, env: VerifierEnv): Promis
 
   const contacts = await scanContacts(cms);
   const targets = contacts
-    .map((page) => ({ page, email: contactEmails(page.lect)[0] ?? '' }))
+    .map((page) => ({ page, email: primaryEdmEmail(page.lect) }))
     .filter(({ page, email }) => email && !attr(page.lect, 'email_status'));
   if (!targets.length) return redirect(`${ADMIN_BASE}/email-quality?flash=${encodeURIComponent('Nothing to verify')}`);
 

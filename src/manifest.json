@@ -71,6 +71,7 @@
     "@remarks",
     "@optout_mobile",
     "@optout_email",
+    "@primary_email",
     "@email_status",
     "@remark_file:file",
     "first_name",

@@ -4,6 +4,7 @@
     <p class="mt-1 text-sm text-gray-500">{{ total }} contact{% if total != 1 %}s{% endif %}{% if q != blank %} matching “{{ q }}”{% endif %}</p>
   </div>
   <div class="flex flex-wrap gap-2">
+    <a class="inline-block px-4 py-2 rounded-lg text-sm font-semibold border border-gray-300 bg-white text-gray-700 hover:bg-gray-50" href="{{ advancedSearchHref }}">Advanced search / export</a>
     {% if canCreate %}<a class="inline-block px-4 py-2 rounded-lg text-sm font-semibold border border-transparent bg-indigo-600 text-white hover:bg-indigo-700" href="{{ createHref }}">New contact</a>{% endif %}
   </div>
 </div>
@@ -49,7 +50,18 @@
         {% if canDelete %}<td class="px-6 py-3"><input type="checkbox" name="ids" value="{{ row.id }}" form="contacts-bulk-form" data-bulk-checkbox aria-label="Select {{ row.name }}" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"></td>{% endif %}
         <td class="px-6 py-3 text-sm text-gray-700"><a class="text-indigo-600 font-medium hover:text-indigo-800" href="{{ row.editHref }}" data-private-field="name">{{ row.name }}</a>{% if row.title != blank %}<div class="text-xs text-gray-400">{{ row.title }}</div>{% endif %}</td>
         <td class="px-6 py-3 text-sm text-gray-700">{{ row.organization }}</td>
-        <td class="px-6 py-3 text-sm text-gray-700"><span data-private-field="email">{{ row.email }}</span>{% if row.emailStatus != blank %} <span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">{{ row.emailStatus }}</span>{% endif %}</td>
+        <td class="px-6 py-3 text-sm text-gray-700"><span data-private-field="email">{{ row.email }}</span>{% if row.email != blank %} <span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">eDM</span>{% endif %}
+          {% if canUpdate %}
+          <form method="post" action="{{ row.primaryEmailAction }}" class="mt-2 flex flex-wrap items-center gap-2">
+            {% if q != blank %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+            <label class="text-xs text-gray-500" for="primary-email-{{ row.id }}">Primary email for eDM</label>
+            <select id="primary-email-{{ row.id }}" name="primary_email" class="block px-3 py-2 border border-gray-300 rounded-lg text-sm">
+              <option value="">Automatic</option>
+              {% for option in row.primaryEmailOptions %}<option value="{{ option.email }}"{% if option.selected %} selected{% endif %}>{{ option.label }} — {{ option.email }}</option>{% endfor %}
+            </select>
+            <button type="submit" class="inline-block px-3 py-2 rounded-lg text-xs font-semibold border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">Save</button>
+          </form>
+          {% endif %}{% if row.emailStatus != blank %} <span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">{{ row.emailStatus }}</span>{% endif %}</td>
         <td class="px-6 py-3 text-sm text-gray-700"><span data-private-field="phone">{{ row.phone }}</span></td>
         <td class="px-6 py-3 text-sm text-gray-700">{{ row.region }}</td>
         <td class="px-6 py-3 text-right">{% if canUpdate %}<a class="text-indigo-600 font-medium hover:text-indigo-800" href="{{ row.editHref }}">Edit</a>{% endif %}</td>

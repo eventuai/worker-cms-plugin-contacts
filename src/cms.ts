@@ -1,3 +1,4 @@
+import { primaryEdmEmail, contactEmailOptions } from './contact-email';
 // ============================================================
 // Contacts Suite CMS bridge.
 //
@@ -70,7 +71,7 @@ export class CmsClient extends BaseCmsClient {
   }
 }
 
-/** Every email a contact carries: personal email items + per-position work emails. */
+/** Audit and duplicate inventory, including assistant/spouse addresses. Never use for eDM eligibility. */
 export function contactEmails(lect: Record<string, unknown>): string[] {
   const found = new Set<string>();
   for (const entry of items(lect, 'email')) {
@@ -81,6 +82,12 @@ export function contactEmails(lect: Record<string, unknown>): string[] {
     for (const key of ['email', 'general_email']) {
       const email = String(position[key] ?? '').trim().toLowerCase();
       if (email) found.add(email);
+    }
+  }
+  for (const key of ['assistant', 'spouse']) {
+    for (const entry of items(lect, key)) {
+      const email = String(entry.email ?? '').trim().toLowerCase();
+      if (email && email !== 'undefined') found.add(email);
     }
   }
   return [...found];
@@ -122,6 +129,9 @@ export interface ContactRow {
   region: string;
   source: string;
   emailStatus: string;
+  primaryEmail: string;
+  primaryEmailOptions: Array<{ email: string; label: string; selected: boolean }>;
+  primaryEmailAction: string;
   editHref: string;
 }
 
@@ -139,7 +149,10 @@ export function contactRow(page: CmsPage, language = 'en'): ContactRow {
     lastName: localized(lect, 'last_name', language),
     organization: localized(firstPosition, 'organization_name', language),
     title: localized(firstPosition, 'title', language),
-    email: emails[0] ?? '',
+    email: primaryEdmEmail(lect),
+    primaryEmail: attr(lect, 'primary_email'),
+    primaryEmailOptions: contactEmailOptions(lect).map(option => ({ ...option, selected: option.email.toLowerCase() === attr(lect, 'primary_email').trim().toLowerCase() })),
+    primaryEmailAction: `/admin/plugins/contacts/contacts/${page.id}/primary-email`,
     emails,
     phone: phones[0] ?? '',
     region: attr(lect, 'region'),
