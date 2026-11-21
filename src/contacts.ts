@@ -1,3 +1,4 @@
+import { readEmailQuality, qualityEmail, qualityStatus } from './email-quality-records';
 import { duplicateContacts } from './contact-duplicates';
 import { contactEmailOptions } from './contact-email';
 // ============================================================
@@ -25,6 +26,11 @@ export async function contactsIndex(cms: CmsClient, views: Fetcher, url: URL, ac
   const offset = Math.max(0, Number.parseInt(url.searchParams.get('offset') ?? '0', 10) || 0);
   const { pages, total } = await cms.list('contact', { q: q || undefined, limit: LIST_LIMIT, offset });
   const rows = pages.map((page) => contactRow(page));
+  const qualities = await readEmailQuality(cms, rows.flatMap(row => row.emails));
+  for (const row of rows) {
+    const quality = qualities.get(qualityEmail(row.email));
+    if (quality) row.emailStatus = qualityStatus(quality.lect);
+  }
 
   const params = (extra: Record<string, string>): string => {
     const search = new URLSearchParams();

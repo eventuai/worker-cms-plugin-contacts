@@ -450,19 +450,18 @@ describe('email quality', () => {
 
   it('submits unverified emails to the configured verifier and writes results back', async () => {
     const pages = [contact(22, 'Uma', { email: [{ email: 'uma@example.com' }] })];
-    const puts: Array<{ id: number; body: Record<string, unknown> }> = [];
+    const creates: Array<Record<string, unknown>> = [];
     // One stub covering both the CMS Plugin API and the external verifier.
     const combined = vi.fn(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input : input.url);
       if (url.origin === 'https://verify.test') {
         return Response.json([{ email: 'uma@example.com', status: 'verified' }]);
       }
+      if (url.pathname === '/__cms/pages' && init?.method === 'POST') {
+        const body = JSON.parse(String(init.body)); creates.push(body); return Response.json({ page: { id: 90, ...body } });
+      }
       if (url.pathname === '/__cms/pages') {
         return Response.json({ pages, total: pages.length });
-      }
-      if (url.pathname === '/__cms/pages/22' && init?.method === 'PUT') {
-        puts.push({ id: 22, body: JSON.parse(String(init.body)) as Record<string, unknown> });
-        return Response.json({ page: { id: 22 } });
       }
       return new Response('not found', { status: 404 });
     });
@@ -474,7 +473,7 @@ describe('email quality', () => {
     }), env({ VERIFIER_API_URL: 'https://verify.test/v1/verify', VERIFIER_API_KEY: 'key' }));
 
     expect(response.status).toBe(303);
-    expect(puts).toEqual([{ id: 22, body: { lect: { email_status: 'verified' } } }]);
+    expect(creates).toEqual([expect.objectContaining({ page_type: 'email_quality', name: 'uma@example.com', lect: expect.objectContaining({ email: 'uma@example.com', status: 'verified', quality: '100' }) })]);
   });
 });
 

@@ -184,6 +184,16 @@
       "@role"
      ]
     }
+   ],
+   "email_quality": [
+    "@email:email",
+    "@quality:number",
+    "@status",
+    "@result",
+    "@free",
+    "@source",
+    "@contact_id",
+    "@checked_at:datetime"
    ]
   },
   "taxonomyLists": {

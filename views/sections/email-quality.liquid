@@ -3,9 +3,9 @@
     <h1 class="text-2xl font-bold text-gray-900">Email Quality</h1>
     <p class="mt-1 text-sm text-gray-500">Verification status across every contact's email addresses.</p>
   </div>
-  <form method="post" action="{{ submitAction }}">
-    <button class="inline-block px-4 py-2 rounded-lg text-sm font-semibold border border-transparent bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer" type="submit">Submit unverified to verifier</button>
-  </form>
+  {% if canUpdate %}<div class="flex flex-wrap gap-2"><a class="inline-block px-4 py-2 rounded-lg text-sm font-semibold border border-gray-300 text-gray-700" href="{{ importHref }}">Import verifier CSV</a><form method="post" action="{{ submitAction }}">
+    <button class="inline-block px-4 py-2 rounded-lg text-sm font-semibold border border-transparent bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer" type="submit">Verify unverified addresses on this page</button>
+  </form></div>{% endif %}
 </div>
 
 {% if flash != blank %}
@@ -48,17 +48,17 @@
       {% for row in rows %}
       <tr>
         <td class="px-6 py-3 text-sm text-gray-700"><a class="text-indigo-600 font-medium hover:text-indigo-800" href="{{ row.editHref }}">{{ row.name }}</a>{% if row.organization != blank %}<div class="text-xs text-gray-400">{{ row.organization }}</div>{% endif %}</td>
-        <td class="px-6 py-3 text-sm text-gray-700">{{ row.emails }}</td>
+        <td class="px-6 py-3 text-sm text-gray-700">{{ row.emails }}{% if row.result != blank %}<div class="text-xs text-gray-500">{{ row.score }} — {{ row.result }} {{ row.free }} {{ row.source }}</div>{% endif %}</td>
         <td class="px-6 py-3 text-sm text-gray-700"><span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">{{ row.heuristic }}</span></td>
         <td class="px-6 py-3 text-sm text-gray-700">
-          <form method="post" action="{{ row.statusAction }}" class="flex flex-wrap items-center gap-1.5">
-            <input type="hidden" name="contact_id" value="{{ row.id }}">
+          {% if canUpdate and row.id != blank %}<form method="post" action="{{ row.statusAction }}" class="flex flex-wrap items-center gap-1.5">
+            <input type="hidden" name="contact_id" value="{{ row.id }}"><input type="hidden" name="email" value="{{ row.email }}">
             <select class="block px-3 py-2 border border-gray-300 rounded-lg text-sm" name="status">
               {% unless row.hasStatus %}<option value="" selected>—</option>{% endunless %}
               {% for status in row.statuses %}<option value="{{ status.value }}"{% if status.selected %} selected{% endif %}>{{ status.value }}</option>{% endfor %}
             </select>
             <button class="border-0 bg-transparent p-0 text-xs font-semibold text-indigo-600 cursor-pointer" type="submit">Set</button>
-          </form>
+          </form>{% else %}{{ row.status }}{% endif %}
         </td>
       </tr>
       {% else %}
@@ -67,3 +67,5 @@
     </tbody>
   </table>
 </div>
+
+<div class="flex items-center justify-between mt-4">{% if previousHref != blank %}<a href="{{ previousHref }}" class="text-indigo-600">Previous contacts</a>{% endif %}{% if nextHref != blank %}<a href="{{ nextHref }}" class="text-indigo-600">Next contacts</a>{% endif %}</div>

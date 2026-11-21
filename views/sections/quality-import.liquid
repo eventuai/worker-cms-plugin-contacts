@@ -1,0 +1,9 @@
+<div class="flex items-center justify-between gap-4 mb-4"><h1 class="text-2xl font-bold text-gray-900">Import verifier results</h1><a href="/admin/plugins/contacts/email-quality" class="text-indigo-600">Email Quality</a></div>
+{% if progress %}<p class="mb-4 text-sm text-gray-700">Saved {{ writes }} record(s) in this pass. Continue to process the remaining results.</p>{% endif %}
+{% if rows %}
+<div class="bg-white rounded-xl border border-gray-200 overflow-x-auto mb-4"><table class="w-full text-left text-sm"><thead><tr><th class="px-4 py-3">Email</th><th class="px-4 py-3">Current status</th><th class="px-4 py-3">Imported score / result</th></tr></thead><tbody>{% for row in rows %}<tr><td class="px-4 py-3">{{ row.email }}</td><td class="px-4 py-3">{{ row.previous }}</td><td class="px-4 py-3">{{ row.quality }} / {{ row.result }}</td></tr>{% endfor %}</tbody></table></div>
+{% endif %}
+<form method="post" action="{{ action }}" enctype="multipart/form-data" class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+{% if confirm or progress %}<input type="hidden" name="csv" value="{{ csv }}">{% else %}<p class="text-sm text-gray-500">CSV: email, quality, result, free, source, contact_id. Scores accept 0–100 or good/ok/risky/unknown/bad/invalid. Reports may contain addresses with no contact yet. Limit: 1,000 addresses / 10 MB.</p><input type="file" name="file" accept=".csv" required>{% endif %}
+<button type="submit" class="inline-block px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold">{% if progress %}Continue import{% elsif confirm %}Apply results{% else %}Preview results{% endif %}</button>
+</form>

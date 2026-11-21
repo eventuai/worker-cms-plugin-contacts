@@ -1,3 +1,4 @@
+import { qualityImport, QualityImportError } from './quality-import';
 // ============================================================
 // Worker CMS plugin — "contacts" suite (CRM + email quality + reports).
 //
@@ -96,6 +97,7 @@ export default {
       try {
         return await handleAdmin(request, env, url);
       } catch (error) {
+        if (error instanceof QualityImportError) return adminView(env.VIEWS, 'Import verifier results', 'error', { heading: 'Invalid verifier report', message: error.message });
         if (error instanceof CmsNotConfiguredError) {
           return adminView(env.VIEWS, 'Contacts', 'error', {
             heading: 'CMS link not configured',
@@ -164,15 +166,19 @@ async function handleAdmin(request: Request, env: PluginEnv, url: URL): Promise<
   }
 
   if (section === 'email-quality') {
+    if (segments[1] === 'import') {
+      if (!access.canUpdate) return forbidden();
+      return await qualityImport(request, cms, env.VIEWS, segments[2] === 'confirm', jsonOnly);
+    }
     if (segments[1] === 'status' && request.method === 'POST') {
       if (!access.canUpdate) return forbidden();
       return setEmailStatus(request, cms);
     }
     if (segments[1] === 'submit' && request.method === 'POST') {
       if (!access.canUpdate) return forbidden();
-      return submitToVerifier(cms, env);
+      return submitToVerifier(cms, env, Math.max(0, Number.parseInt(url.searchParams.get('offset') || '0', 10) || 0));
     }
-    return emailQualityIndex(cms, env.VIEWS, env, url, jsonOnly);
+    return emailQualityIndex(cms, env.VIEWS, env, url, jsonOnly, access.canUpdate);
   }
 
   if (section === 'reports') {
