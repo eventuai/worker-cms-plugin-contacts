@@ -57,6 +57,7 @@ interface FakePage {
   page_type: string;
   name: string;
   page_id?: number | null;
+  tags?: Array<{ id: number; name: string; taxonomy: string; taxonomy_slug: string }>;
   lect: Record<string, unknown>;
 }
 
@@ -73,7 +74,9 @@ function fakeCms(pages: FakePage[], options: { persist?: boolean } = {}) {
       const type = url.searchParams.get('page_type');
       const offset = Number(url.searchParams.get('offset') ?? 0);
       const limit = Number(url.searchParams.get('limit') ?? 50);
+      const ids = url.searchParams.get('ids')?.split(',').map(Number);
       const matched = pages.filter((page) => page.page_type === type
+        && (!ids || ids.includes(page.id))
         && (!q || `${page.name} ${JSON.stringify(page.lect)}`.toLowerCase().includes(q)));
       return Response.json({ pages: matched.slice(offset, offset + limit), total: matched.length });
     }
@@ -140,7 +143,7 @@ afterEach(() => {
 });
 
 describe('contacts admin', () => {
-  it('lists and searches contacts with rows linking to the CMS editor', async () => {
+  it('lists and searches contacts with names linking to read-only profiles', async () => {
     fakeCms([ADA, GRACE]);
     const response = await plugin.fetch(request('/__plugin/admin/contacts?q=ada'), env());
     const html = await renderedText(response);
@@ -149,12 +152,81 @@ describe('contacts admin', () => {
     expect(html).toContain('Ada Lovelace');
     expect(html).toContain('Analytical Engines');
     expect(html).toContain('ada@personal.example');
-    expect(html).toContain('/admin/pages/11/edit');
+    expect(html).toContain('href="/admin/plugins/contacts/contacts/11?q=ada"');
+    expect(html).not.toContain('/admin/pages/11/edit');
     expect(html).toContain('data-privacy-table');
     expect(html).toContain('data-private-field="name"');
     expect(html).toContain('data-private-field="email"');
     expect(html).toContain('data-private-field="phone"');
     expect(html).not.toContain('Grace Hopper');
+  });
+
+  it('renders populated contact fields, tags, event history and both business card scans', async () => {
+    fakeCms([GRACE, {
+      ...ADA,
+      tags: [{ id: 2, name: 'Technology', taxonomy: 'Industry', taxonomy_slug: 'industry' }],
+      lect: {
+        ...ADA.lect,
+        given_only_spacing: ' ',
+        remarks: '  ',
+        bio: { en: '  ', 'zh-hant': '傳記 & 資料' },
+        optout_email: false,
+        assistant: [{ name: { en: '' }, email: '' }, { work_phone: '+852 5555 0100' }],
+        spouse: [{ mobile: '+852 5555 0200' }],
+        event_history: [{}, { event_name: 'Annual dinner', rsvp: 'Accepted' }],
+        attachment: '/media/files/card-front.jpg',
+        attachment2: 'https://images.example/cards/back.jpg?x=1&y=2',
+      },
+    }]);
+    const response = await plugin.fetch(request('/__plugin/admin/contacts/11?q=Ada&offset=200'), env());
+    const html = await renderedText(response);
+
+    expect(response.status).toBe(200);
+    expect(html).toContain('href="/admin/plugins/contacts/contacts?q=Ada&amp;offset=200"');
+    expect(html).toContain('href="/admin/pages/11/edit?return_to=%2Fadmin%2Fplugins%2Fcontacts%2Fcontacts%2F11%3Fq%3DAda%26offset%3D200"');
+    expect(html).toContain('Ada Lovelace');
+    expect(html).toContain('Analytical Engines');
+    expect(html).toContain('傳記 &amp; 資料');
+    expect(html).toContain('Email opt-out');
+    expect(html).toContain('>false</dd>');
+    expect(html).toContain('+852 5555 0100');
+    expect(html).toContain('+852 5555 0200');
+    expect(html).toContain('Technology');
+    expect(html).toContain('Annual dinner');
+    expect(html).toContain('Accepted');
+    expect(html).toContain('src="/media/files/card-front.jpg"');
+    expect(html).toContain('src="https://images.example/cards/back.jpg?x=1&amp;y=2"');
+    expect(html).not.toContain('>Remarks<');
+    expect(html).not.toContain('>Home addresses<');
+    expect(html).not.toContain('<form');
+    expect(html).not.toContain('Grace Hopper');
+  });
+
+  it('serves sparse profiles to read-only users and excludes invalid card URLs', async () => {
+    fakeCms([contact(13, 'Sparse contact', { attachment: 'javascript:alert(1)', position: [{}] })]);
+    const response = await plugin.fetch(request('/__plugin/admin/contacts/13', {
+      headers: { 'x-cms-user': JSON.stringify({ role: 'staff', permissions: ['contacts:read'] }) },
+    }), env());
+    const html = await renderedText(response);
+
+    expect(response.status).toBe(200);
+    expect(html).toContain('Sparse contact');
+    expect(html).not.toContain('Edit contact');
+    expect(html).not.toContain('Contact details');
+    expect(html).not.toContain('Positions');
+    expect(html).not.toContain('Business card');
+    expect(html).not.toContain('javascript:');
+  });
+
+  it('returns not found for missing records and denies users without contact access', async () => {
+    fakeCms([{ id: 13, page_type: 'organization', name: 'Organization', lect: {} }]);
+    const missing = await plugin.fetch(request('/__plugin/admin/contacts/13'), env());
+    const denied = await plugin.fetch(request('/__plugin/admin/contacts/13', {
+      headers: { 'x-cms-user': JSON.stringify({ role: 'staff', permissions: [] }) },
+    }), env());
+
+    expect(missing.status).toBe(404);
+    expect(denied.status).toBe(403);
   });
 
   it('keeps the empty-state message out of PII masking', async () => {

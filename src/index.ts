@@ -22,6 +22,7 @@
 import MANIFEST from './manifest.json';
 import { CmsClient, CmsApiError, CmsNotConfiguredError } from './cms';
 import { ADMIN_BASE, bulkDeleteContacts, checkDuplicate, contactsIndex, searchJson, setPrimaryEmail } from './contacts';
+import { contactProfile } from './contact-profile';
 import { emailQualityIndex, setEmailStatus, submitToVerifier, type VerifierEnv } from './email-quality';
 import { contactQualityReport } from './reports';
 import { backfillPass, backfillPreview, organizationsIndex, organizationsSearchJson } from './organizations';
@@ -144,6 +145,10 @@ async function handleAdmin(request: Request, env: PluginEnv, url: URL): Promise<
     }
     if (sub === 'check-duplicate.json') return checkDuplicate(cms, url);
     if (sub === 'search.json') return searchJson(cms, url);
+    if (/^[1-9]\d*$/.test(sub) && segments.length === 2) {
+      if (request.method !== 'GET') return new Response('method not allowed', { status: 405, headers: { Allow: 'GET' } });
+      return contactProfile(cms, env.VIEWS, Number(sub), url, access, jsonOnly);
+    }
   }
 
   if (section === 'organizations') {

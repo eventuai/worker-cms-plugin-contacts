@@ -109,7 +109,7 @@ export function contactPhones(lect: Record<string, unknown>): string[] {
   return [...found];
 }
 
-export function contactDisplayName(page: CmsPage, language = 'en'): string {
+export function contactDisplayName(page: Pick<CmsPage, 'lect' | 'name'>, language = 'en'): string {
   const lect = page.lect;
   return localized(lect, 'full_name', language)
     || [localized(lect, 'first_name', language), localized(lect, 'last_name', language)].filter(Boolean).join(' ')

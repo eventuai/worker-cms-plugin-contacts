@@ -3,7 +3,7 @@ import { contactEmailOptions } from './contact-email';
 // ============================================================
 // Contacts admin: list + search, bulk delete, duplicate check and
 // the typeahead JSON other plugin admins consume (the legacy HX equivalent).
-// Authoring stays in the CMS page editor — rows link there.
+// Contacts open in a read-only profile. Authoring uses the CMS page editor.
 //
 // Ported from the legacy controller/admin/Contact.mjs list/search surface.
 // CSV import/export is handled by the generic import-export plugin. Search
@@ -40,7 +40,10 @@ export async function contactsIndex(cms: CmsClient, views: Fetcher, url: URL, ac
     canCreate: access.canCreate,
     canUpdate: access.canUpdate,
     canDelete: access.canDelete,
-    rows,
+    rows: rows.map(row => ({
+      ...row,
+      viewHref: `${ADMIN_BASE}/contacts/${row.id}${params(offset ? { offset: String(offset) } : {})}`,
+    })),
     total,
     count: rows.length,
     offset,
